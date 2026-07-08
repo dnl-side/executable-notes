@@ -1,10 +1,20 @@
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Note, NoteRun
-from app.schemas import NoteCreate, NoteResponse, NoteRunResponse, NoteUpdate
+from app.models import Note, NoteRun, NoteScreenshot
+from app.schemas import (
+    NoteCreate,
+    NoteResponse,
+    NoteRunResponse,
+    NoteScreenshotResponse,
+    NoteUpdate,
+)
 from app.services.execution_service import execute_note, stop_note
+from app.services.screenshot_service import capture_note_screenshot
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
@@ -132,3 +142,79 @@ def stop_note_process(note_id: int, db: Session = Depends(get_db)) -> NoteRun:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
+    
+@router.post("/{note_id}/screenshots", response_model=NoteScreenshotResponse)
+def create_note_screenshot(
+    note_id: int,
+    db: Session = Depends(get_db),
+) -> NoteScreenshot:
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    try:
+        return capture_note_screenshot(db, note)
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Screenshot capture failed: {error}",
+        ) from error
+
+
+@router.get("/{note_id}/screenshots", response_model=list[NoteScreenshotResponse])
+def list_note_screenshots(
+    note_id: int,
+    db: Session = Depends(get_db),
+) -> list[NoteScreenshot]:
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    return (
+        db.query(NoteScreenshot)
+        .filter(NoteScreenshot.note_id == note_id)
+        .order_by(NoteScreenshot.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/{note_id}/screenshots/{screenshot_id}/file")
+def get_note_screenshot_file(
+    note_id: int,
+    screenshot_id: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    screenshot = (
+        db.query(NoteScreenshot)
+        .filter(NoteScreenshot.id == screenshot_id)
+        .filter(NoteScreenshot.note_id == note_id)
+        .first()
+    )
+
+    if screenshot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Screenshot not found",
+        )
+
+    file_path = Path(screenshot.file_path)
+
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Screenshot file not found",
+        )
+
+    return FileResponse(
+        path=file_path,
+        media_type="image/png",
+        filename=screenshot.file_name,
+    )

@@ -58,3 +58,12 @@ class NoteRunResponse(BaseModel):
     finished_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+class NoteScreenshotResponse(BaseModel):
+    id: int
+    note_id: int
+    file_name: str
+    file_path: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

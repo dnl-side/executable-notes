@@ -3,3 +3,5 @@ sqlalchemy
 pydantic-settings
 python-multipart
 pyautogui
+pillow
+pyscreeze

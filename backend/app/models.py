@@ -46,6 +46,12 @@ class Note(Base):
         cascade="all, delete-orphan",
     )
 
+    screenshots: Mapped[list["NoteScreenshot"]] = relationship(
+        back_populates="note",
+        cascade="all, delete-orphan",
+    )
+
+
 
 class NoteRun(Base):
     __tablename__ = "note_runs"
@@ -72,3 +78,21 @@ class NoteRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     note: Mapped[Note] = relationship(back_populates="runs")
+    
+
+class NoteScreenshot(Base):
+    __tablename__ = "note_screenshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    note_id: Mapped[int] = mapped_column(ForeignKey("notes.id"), nullable=False)
+
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+
+    note: Mapped[Note] = relationship(back_populates="screenshots")
