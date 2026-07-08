@@ -1,0 +1,37 @@
+﻿# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.venv/
+backend/venv/
+backend/*.db
+backend/*.sqlite
+backend/*.sqlite3
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Local env
+.env
+.env.*
+backend/.env
+frontend/.env
+frontend/.env.*
+
+# Runtime generated files
+backend/storage/uploads/*
+backend/storage/screenshots/*
+backend/storage/logs/*
+!backend/storage/uploads/.gitkeep
+!backend/storage/screenshots/.gitkeep
+!backend/storage/logs/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
