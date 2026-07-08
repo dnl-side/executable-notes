@@ -67,6 +67,31 @@ function App() {
     void loadNotes();
   }, []);
 
+    useEffect(() => {
+    if (!showRuns || selectedNoteId === null) {
+      return;
+    }
+
+    const hasRunningExecute = runs.some((run) => run.status === "running");
+
+    if (!hasRunningExecute) {
+      return;
+    }
+
+    const timerId = window.setInterval(async () => {
+      try {
+        const data = await fetchNoteRuns(selectedNoteId);
+        setRuns(data);
+      } catch (error) {
+        console.error(error);
+      }
+    }, 2000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [showRuns, selectedNoteId, runs]);
+
   useEffect(() => {
     setRuns([]);
     setShowRuns(false);
@@ -287,7 +312,7 @@ function App() {
               id="title"
               value={form.title}
               onChange={(event) => updateForm("title", event.target.value)}
-              placeholder="例: Japanese Learning 起動"
+              placeholder="例: APP 起動"
             />
           </div>
 
@@ -347,7 +372,7 @@ function App() {
               onChange={(event) =>
                 updateForm("working_directory", event.target.value)
               }
-              placeholder="C:\Users\hara_daniel\Documents\Projects\japanese-learning"
+              placeholder="C:\work\"
             />
           </div>
 

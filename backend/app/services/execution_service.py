@@ -3,14 +3,19 @@ from pathlib import Path
 import subprocess
 import tempfile
 import time
+import threading
 
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
 from sqlalchemy.orm import Session
 
+from app.database import SessionLocal
 from app.models import Note, NoteRun
 
+EXECUTE_TIMEOUT_SECONDS = 900
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
+LOG_DIR = BACKEND_ROOT / "storage" / "logs"
 
 def _validate_working_directory(working_directory: str | None) -> Path:
     if not working_directory:
@@ -26,15 +31,34 @@ def _validate_working_directory(working_directory: str | None) -> Path:
 
     return path
 
+def _normalize_batch_command(command: str) -> str:
+    stripped_command = command.strip()
+    lower_command = stripped_command.lower()
+
+    if lower_command.startswith("call "):
+        return stripped_command
+
+    first_token = stripped_command.split()[0].strip('"').lower()
+
+    if first_token.endswith(".bat") or first_token.endswith(".cmd"):
+        return f"call {stripped_command}"
+
+    return stripped_command
+
+
+def _ps_quote(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
 
 def _build_cmd_bat(working_directory: Path, commands: list[str]) -> str:
     lines = [
         "@echo off",
+        "chcp 65001 >nul",
         f'cd /d "{working_directory}"',
     ]
 
     for command in commands:
-        lines.append(command)
+        normalized_command = _normalize_batch_command(command)
+        lines.append(normalized_command)
         lines.append("if errorlevel 1 exit /b %errorlevel%")
 
     return "\n".join(lines) + "\n"
@@ -127,6 +151,8 @@ def _run_execute_mode(
     working_directory: Path,
     commands: list[str],
 ) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
     bat_content = _build_cmd_bat(working_directory, commands)
 
     with tempfile.NamedTemporaryFile(
@@ -138,22 +164,147 @@ def _run_execute_mode(
         file.write(bat_content)
         bat_path = file.name
 
-    result = subprocess.run(
-        ["cmd.exe", "/c", bat_path],
-        capture_output=True,
-        text=True,
-        timeout=300,
+    log_path = LOG_DIR / f"note_run_{run.id}.log"
+
+    ps_script = "\n".join(
+        [
+            "$ErrorActionPreference = 'Continue'",
+            "$OutputEncoding = [System.Text.Encoding]::UTF8",
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+            "chcp 65001 > $null",
+            f"$batPath = {_ps_quote(bat_path)}",
+            f"$logPath = {_ps_quote(str(log_path))}",
+            "New-Item -ItemType Directory -Force -Path (Split-Path $logPath) | Out-Null",
+            "if (Test-Path $logPath) { Remove-Item $logPath -Force }",
+            'Write-Host "[Executable Notes] 実行を開始します..."',
+            'Write-Host "[Executable Notes] BAT: $batPath"',
+            'Write-Host "[Executable Notes] LOG: $logPath"',
+            '& cmd.exe /c $batPath 2>&1 | ForEach-Object {',
+            '    $line = $_.ToString()',
+            '    Write-Host $line',
+            '    Add-Content -Path $logPath -Value $line -Encoding UTF8',
+            '}',
+            "$exitCode = $LASTEXITCODE",
+            'Write-Host ""',
+            'Write-Host "[Executable Notes] 実行が完了しました。ExitCode=$exitCode"',
+            "Start-Sleep -Seconds 3",
+            "exit $exitCode",
+        ]
     )
 
-    run.return_code = result.returncode
-    run.stdout = result.stdout
-    run.stderr = result.stderr
-    run.status = "success" if result.returncode == 0 else "failed"
-    run.finished_at = datetime.utcnow()
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".ps1",
+        delete=False,
+        encoding="utf-8",
+    ) as file:
+        file.write(ps_script)
+        ps1_path = file.name
 
+    process = subprocess.Popen(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            ps1_path,
+        ],
+        cwd=str(working_directory),
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+    )
+
+    run.pid = process.pid
+    run.status = "running"
+    run.stdout = ""
+    run.stderr = ""
     db.commit()
     db.refresh(run)
 
+    watcher = threading.Thread(
+        target=_watch_visible_execute_process,
+        args=(run.id, process, log_path, bat_path, ps1_path),
+        daemon=True,
+    )
+    watcher.start()
+
+def _stream_process_output(run_id: int, process: subprocess.Popen[str]) -> None:
+    if process.stdout is None:
+        return
+
+    db = SessionLocal()
+
+    try:
+        for line in process.stdout:
+            run = db.get(NoteRun, run_id)
+
+            if run is None:
+                break
+
+            run.stdout = (run.stdout or "") + line
+            db.commit()
+
+    finally:
+        db.close()
+
+
+def _watch_execute_process(
+    run_id: int,
+    process: subprocess.Popen[str],
+    bat_path: str,
+) -> None:
+    reader = threading.Thread(
+        target=_stream_process_output,
+        args=(run_id, process),
+        daemon=True,
+    )
+    reader.start()
+
+    timed_out = False
+
+    try:
+        return_code = process.wait(timeout=EXECUTE_TIMEOUT_SECONDS)
+
+    except subprocess.TimeoutExpired:
+        timed_out = True
+
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            capture_output=True,
+            text=True,
+        )
+
+        return_code = process.wait()
+
+    reader.join(timeout=5)
+
+    db = SessionLocal()
+
+    try:
+        run = db.get(NoteRun, run_id)
+
+        if run is not None:
+            run.return_code = return_code
+            run.finished_at = datetime.utcnow()
+
+            if timed_out:
+                run.status = "failed"
+                run.stderr = (
+                    (run.stderr or "")
+                    + f"\nタイムアウトしました: {EXECUTE_TIMEOUT_SECONDS}秒"
+                )
+            else:
+                run.status = "success" if return_code == 0 else "failed"
+
+            db.commit()
+
+    finally:
+        db.close()
+
+    try:
+        Path(bat_path).unlink(missing_ok=True)
+    except OSError:
+        pass
 
 def _run_launch_mode(
     db: Session,
@@ -237,3 +388,102 @@ def stop_note(db: Session, note: Note) -> NoteRun:
     db.refresh(run)
 
     return run
+
+def _read_new_log_text(log_path: Path, offset: int) -> tuple[str, int]:
+    if not log_path.exists():
+        return "", offset
+
+    with log_path.open("r", encoding="utf-8", errors="replace") as file:
+        file.seek(offset)
+        text = file.read()
+        return text, file.tell()
+
+
+def _append_stdout(run_id: int, text: str) -> None:
+    if not text:
+        return
+
+    db = SessionLocal()
+
+    try:
+        run = db.get(NoteRun, run_id)
+
+        if run is None:
+            return
+
+        run.stdout = (run.stdout or "") + text
+        db.commit()
+
+    finally:
+        db.close()
+
+
+def _finish_execute_run(
+    run_id: int,
+    return_code: int,
+    timed_out: bool,
+) -> None:
+    db = SessionLocal()
+
+    try:
+        run = db.get(NoteRun, run_id)
+
+        if run is None:
+            return
+
+        run.return_code = return_code
+        run.finished_at = datetime.utcnow()
+
+        if timed_out:
+            run.status = "failed"
+            run.stderr = (
+                (run.stderr or "")
+                + f"\nタイムアウトしました: {EXECUTE_TIMEOUT_SECONDS}秒"
+            )
+        else:
+            run.status = "success" if return_code == 0 else "failed"
+
+        db.commit()
+
+    finally:
+        db.close()
+
+
+def _watch_visible_execute_process(
+    run_id: int,
+    process: subprocess.Popen,
+    log_path: Path,
+    bat_path: str,
+    ps1_path: str,
+) -> None:
+    offset = 0
+    deadline = time.monotonic() + EXECUTE_TIMEOUT_SECONDS
+    timed_out = False
+
+    while process.poll() is None:
+        text, offset = _read_new_log_text(log_path, offset)
+        _append_stdout(run_id, text)
+
+        if time.monotonic() > deadline:
+            timed_out = True
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                capture_output=True,
+                text=True,
+            )
+            break
+
+        time.sleep(1)
+
+    return_code = process.wait()
+
+    text, offset = _read_new_log_text(log_path, offset)
+    _append_stdout(run_id, text)
+
+    _finish_execute_run(run_id, return_code, timed_out)
+
+    for temp_path in [bat_path, ps1_path]:
+        try:
+            Path(temp_path).unlink(missing_ok=True)
+        except OSError:
+            pass
