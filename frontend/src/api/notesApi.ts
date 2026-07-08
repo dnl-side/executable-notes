@@ -79,3 +79,31 @@ export async function stopNote(noteId: number): Promise<NoteRun> {
     method: "POST",
   });
 }
+export interface NoteScreenshot {
+  id: number;
+  note_id: number;
+  file_name: string;
+  file_path: string;
+  created_at: string;
+}
+
+export async function captureNoteScreenshot(
+  noteId: number,
+): Promise<NoteScreenshot> {
+  return request<NoteScreenshot>(`/notes/${noteId}/screenshots`, {
+    method: "POST",
+  });
+}
+
+export async function fetchNoteScreenshots(
+  noteId: number,
+): Promise<NoteScreenshot[]> {
+  return request<NoteScreenshot[]>(`/notes/${noteId}/screenshots`);
+}
+
+export function getNoteScreenshotFileUrl(
+  noteId: number,
+  screenshotId: number,
+): string {
+  return `${API_BASE_URL}/notes/${noteId}/screenshots/${screenshotId}/file`;
+}

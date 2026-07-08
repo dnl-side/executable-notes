@@ -62,6 +62,15 @@ if errorlevel 1 (
     exit /b 1
 )
 
+echo スクリーンショット依存関係を確認しています...
+python -c "import pyautogui, pyscreeze, pygetwindow; from PIL import Image; print('Screenshot dependencies OK')"
+if errorlevel 1 (
+    echo [ERROR] スクリーンショット依存関係の確認に失敗しました。
+    echo pillow / pyscreeze / pyautogui / pygetwindow を確認してください。
+    pause
+    exit /b 1
+)
+
 echo.
 echo [4/6] Frontend 環境を準備しています...
 

@@ -207,6 +207,14 @@ button {
   background: #4b5563;
 }
 
+.actions .screenshot {
+  background: #7c3aed;
+}
+
+.actions .screenshots {
+  background: #0f766e;
+}
+
 .run-panel {
   margin-top: 24px;
   border-top: 1px solid #e5e7eb;
@@ -290,4 +298,52 @@ button {
 .run-card summary {
   cursor: pointer;
   font-weight: 700;
+}
+
+.screenshot-panel {
+  margin-top: 24px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+}
+
+.screenshot-panel h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+.screenshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.screenshot-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.screenshot-card img {
+  display: block;
+  width: 100%;
+  height: 140px;
+  object-fit: cover;
+  background: #111827;
+}
+
+.screenshot-card div {
+  padding: 10px;
+}
+
+.screenshot-card strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.screenshot-card span {
+  color: #6b7280;
+  font-size: 12px;
 }

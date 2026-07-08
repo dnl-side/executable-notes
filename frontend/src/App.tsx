@@ -2,13 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   applyNote,
+  captureNoteScreenshot,
   createNote,
   deleteNote,
   fetchNoteRuns,
+  fetchNoteScreenshots,
   fetchNotes,
+  getNoteScreenshotFileUrl,
   stopNote,
   updateNote,
   type NoteRun,
+  type NoteScreenshot,
 } from "./api/notesApi";
 import type { DefaultShell, Note, NotePayload, NoteType, RunMode } from "./types/note";
 
@@ -38,6 +42,8 @@ function App() {
   const [message, setMessage] = useState("");
   const [runs, setRuns] = useState<NoteRun[]>([]);
   const [showRuns, setShowRuns] = useState(false);
+  const [screenshots, setScreenshots] = useState<NoteScreenshot[]>([]);
+  const [showScreenshots, setShowScreenshots] = useState(false);
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
@@ -95,6 +101,8 @@ function App() {
   useEffect(() => {
     setRuns([]);
     setShowRuns(false);
+    setScreenshots([]);
+    setShowScreenshots(false);
 
     if (selectedNote === null) {
       setForm(emptyForm);
@@ -267,6 +275,57 @@ function App() {
     }
   }
 
+    async function handleCaptureScreenshot() {
+    if (selectedNoteId === null) {
+      setMessage("スクリーンショットを取得するノートを選択してください。");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await captureNoteScreenshot(selectedNoteId);
+      const data = await fetchNoteScreenshots(selectedNoteId);
+      setScreenshots(data);
+      setShowScreenshots(true);
+      setMessage("スクリーンショットを取得しました。");
+    } catch (error) {
+      console.error(error);
+      setMessage("スクリーンショットの取得に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadScreenshots() {
+    if (selectedNoteId === null) {
+      setMessage("スクリーンショットを確認するノートを選択してください。");
+      return;
+    }
+
+    if (showScreenshots) {
+      setShowScreenshots(false);
+      setMessage("スクリーンショットを非表示にしました。");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const data = await fetchNoteScreenshots(selectedNoteId);
+      setScreenshots(data);
+      setShowScreenshots(true);
+      setMessage("スクリーンショットを取得しました。");
+    } catch (error) {
+      console.error(error);
+      setMessage("スクリーンショットの取得に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -417,6 +476,22 @@ function App() {
             >
               停止
             </button>
+                        <button
+              type="button"
+              className="screenshot"
+              onClick={handleCaptureScreenshot}
+              disabled={selectedNoteId === null || loading}
+            >
+              スクショ
+            </button>
+            <button
+              type="button"
+              className="screenshots"
+              onClick={handleLoadScreenshots}
+              disabled={selectedNoteId === null || loading}
+            >
+              {showScreenshots ? "画像非表示" : "画像確認"}
+            </button>
             <button
               type="button"
               className="logs"
@@ -506,6 +581,36 @@ function App() {
               ))}
             </section>
           )}
+
+          {showScreenshots && selectedNoteId !== null && (
+            <section className="screenshot-panel">
+              <h2>スクリーンショット</h2>
+
+              {screenshots.length === 0 && (
+                <p className="empty-message">スクリーンショットがありません。</p>
+              )}
+
+              <div className="screenshot-grid">
+                {screenshots.map((screenshot) => (
+                  <article key={screenshot.id} className="screenshot-card">
+                    <img
+                      src={getNoteScreenshotFileUrl(
+                        selectedNoteId,
+                        screenshot.id,
+                      )}
+                      alt={screenshot.file_name}
+                    />
+                    <div>
+                      <strong>{screenshot.file_name}</strong>
+                      <span>
+                        {new Date(screenshot.created_at).toLocaleString()}
+                      </span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}          
         </section>
       </section>
     </main>
