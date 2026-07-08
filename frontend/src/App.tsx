@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { ActionBar } from "./components/ActionBar";
+import { NoteList } from "./components/NoteList";
+import { RunPanel } from "./components/RunPanel";
+import { ScreenshotModal } from "./components/ScreenshotModal";
+import { ScreenshotPanel } from "./components/ScreenshotPanel";
 import {
   applyNote,
   createNote,
@@ -8,7 +13,6 @@ import {
   fetchNoteRuns,
   fetchNoteScreenshots,
   fetchNotes,
-  getNoteScreenshotFileUrl,
   stopNote,
   updateNote,
   type NoteRun,
@@ -370,30 +374,12 @@ function App() {
       </header>
 
       <section className="app-layout">
-        <aside className="note-list">
-          <div className="note-list-header">
-            <h2>ノート一覧</h2>
-            {loading && <span>読み込み中...</span>}
-          </div>
-
-          {notes.length === 0 && (
-            <p className="empty-message">まだノートがありません。</p>
-          )}
-
-          {notes.map((note) => (
-            <button
-              type="button"
-              key={note.id}
-              className={
-                note.id === selectedNoteId ? "note-card selected" : "note-card"
-              }
-              onClick={() => setSelectedNoteId(note.id)}
-            >
-              <strong>#{note.id} {note.title}</strong>
-              <span>{note.note_type} / {note.run_mode}</span>
-            </button>
-          ))}
-        </aside>
+        <NoteList
+          notes={notes}
+          selectedNoteId={selectedNoteId}
+          loading={loading}
+          onSelectNote={setSelectedNoteId}
+        />
 
         <section className="editor-panel">
           <div className="form-row">
@@ -487,218 +473,42 @@ function App() {
             />
           </div>
 
-                    <div className="actions">
-            <button type="button" onClick={handleSave} disabled={loading}>
-              保存
-            </button>
-            <button
-              type="button"
-              className="apply"
-              onClick={handleApply}
-              disabled={selectedNoteId === null || loading}
-            >
-              適用
-            </button>
-            <button
-              type="button"
-              className="stop"
-              onClick={handleStop}
-              disabled={selectedNoteId === null || loading}
-            >
-              停止
-            </button>
-            <button
-              type="button"
-              className="screenshots"
-              onClick={handleLoadScreenshots}
-              disabled={selectedNoteId === null || loading}
-            >
-              {showScreenshots ? "画像非表示" : "画像確認"}
-            </button>
-            <button
-              type="button"
-              className="logs"
-              onClick={handleLoadRuns}
-              disabled={selectedNoteId === null || loading}
-            >
-              {showRuns ? "ログ非表示" : "ログ確認"}
-            </button>
-            <button
-              type="button"
-              className="danger"
-              onClick={handleDelete}
-              disabled={selectedNoteId === null || loading}
-            >
-              削除
-            </button>
-          </div>
+          <ActionBar
+            selectedNoteId={selectedNoteId}
+            loading={loading}
+            showScreenshots={showScreenshots}
+            showRuns={showRuns}
+            onSave={handleSave}
+            onApply={handleApply}
+            onStop={handleStop}
+            onLoadScreenshots={handleLoadScreenshots}
+            onLoadRuns={handleLoadRuns}
+            onDelete={handleDelete}
+          />
 
           {message && <p className="status-message">{message}</p>}
           
           {showScreenshots && selectedNoteId !== null && (
-            <section className="screenshot-panel">
-              <div className="panel-header">
-                <h2>スクリーンショット</h2>
-                <button
-                  type="button"
-                  onClick={() => void loadScreenshots(selectedNoteId)}
-                  disabled={loading}
-                >
-                  更新
-                </button>
-              </div>
-
-              {screenshots.length === 0 && (
-                <p className="empty-message">スクリーンショットがありません。</p>
-              )}
-
-              <div className="screenshot-grid">
-                {screenshots.map((screenshot) => (
-                  <article key={screenshot.id} className="screenshot-card">
-                    <button
-                      type="button"
-                      className="screenshot-preview"
-                      onClick={() => setSelectedScreenshot(screenshot)}
-                    >
-                      <img
-                        src={getNoteScreenshotFileUrl(selectedNoteId, screenshot.id)}
-                        alt={screenshot.file_name}
-                      />
-                    </button>
-
-                    <div>
-                      <strong>{screenshot.file_name}</strong>
-                      <span>{new Date(screenshot.created_at).toLocaleString()}</span>
-                    </div>
-
-                    <div className="screenshot-actions">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedScreenshot(screenshot)}
-                      >
-                        拡大
-                      </button>
-                      <button
-                        type="button"
-                        className="danger-small"
-                        onClick={() => void handleDeleteScreenshot(screenshot.id)}
-                        disabled={loading}
-                      >
-                        削除
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
+            <ScreenshotPanel
+              noteId={selectedNoteId}
+              screenshots={screenshots}
+              loading={loading}
+              onRefresh={() => void loadScreenshots(selectedNoteId)}
+              onOpen={setSelectedScreenshot}
+              onDelete={(screenshotId) => void handleDeleteScreenshot(screenshotId)}
+            />
           )}
           {selectedScreenshot !== null && selectedNoteId !== null && (
-          <div
-            className="screenshot-modal"
-            role="dialog"
-            aria-modal="true"
-            onClick={() => setSelectedScreenshot(null)}
-          >
-            <div
-              className="screenshot-modal-content"
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="screenshot-modal-header">
-                <strong>{selectedScreenshot.file_name}</strong>
-                <button type="button" onClick={() => setSelectedScreenshot(null)}>
-                  閉じる
-                </button>
-              </div>
-
-              <img
-                src={getNoteScreenshotFileUrl(selectedNoteId, selectedScreenshot.id)}
-                alt={selectedScreenshot.file_name}
-              />
-
-              <div className="screenshot-modal-actions">
-                <button
-                  type="button"
-                  className="danger-small"
-                  onClick={() => void handleDeleteScreenshot(selectedScreenshot.id)}
-                  disabled={loading}
-                >
-                  削除
-                </button>
-              </div>
-            </div>
-          </div>
+            <ScreenshotModal
+              noteId={selectedNoteId}
+              screenshot={selectedScreenshot}
+              loading={loading}
+              onClose={() => setSelectedScreenshot(null)}
+              onDelete={(screenshotId) => void handleDeleteScreenshot(screenshotId)}
+            />
           )}
 
-          {showRuns && (
-            <section className="run-panel">
-              <h2>実行ログ</h2>
-
-              {runs.length === 0 && (
-                <p className="empty-message">実行履歴がありません。</p>
-              )}
-
-              {runs.map((run) => (
-                <article key={run.id} className="run-card">
-                  <div className="run-card-header">
-                    <strong>
-                      #{run.id} / {run.status}
-                    </strong>
-                    <span>{new Date(run.started_at).toLocaleString()}</span>
-                  </div>
-
-                  <dl className="run-meta">
-                    <div>
-                      <dt>mode</dt>
-                      <dd>{run.run_mode}</dd>
-                    </div>
-                    <div>
-                      <dt>pid</dt>
-                      <dd>{run.pid ?? "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>return</dt>
-                      <dd>{run.return_code ?? "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>finished</dt>
-                      <dd>
-                        {run.finished_at
-                          ? new Date(run.finished_at).toLocaleString()
-                          : "-"}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="run-command">
-                    <strong>command</strong>
-                    <pre>{run.command}</pre>
-                  </div>
-
-                  {run.working_directory && (
-                    <div className="run-command">
-                      <strong>working directory</strong>
-                      <pre>{run.working_directory}</pre>
-                    </div>
-                  )}
-
-                  {run.stdout && (
-                    <details open>
-                      <summary>stdout</summary>
-                      <pre>{run.stdout}</pre>
-                    </details>
-                  )}
-
-                  {run.stderr && (
-                    <details open>
-                      <summary>stderr</summary>
-                      <pre>{run.stderr}</pre>
-                    </details>
-                  )}
-                </article>
-              ))}
-            </section>
-          )}
-
+          {showRuns && <RunPanel runs={runs} />}
 
         </section>
       </section>
