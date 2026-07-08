@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Note, NoteRun
+from app.services.screenshot_service import capture_window_screenshot_by_title
 
 EXECUTE_TIMEOUT_SECONDS = 900
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -165,17 +166,22 @@ def _run_execute_mode(
         bat_path = file.name
 
     log_path = LOG_DIR / f"note_run_{run.id}.log"
+    marker_path = LOG_DIR / f"note_run_{run.id}.done"
+    window_title = f"ExecutableNotes-Run-{run.id}"
 
     ps_script = "\n".join(
         [
             "$ErrorActionPreference = 'Continue'",
             "$OutputEncoding = [System.Text.Encoding]::UTF8",
             "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+            f"[Console]::Title = {_ps_quote(window_title)}",
             "chcp 65001 > $null",
             f"$batPath = {_ps_quote(bat_path)}",
             f"$logPath = {_ps_quote(str(log_path))}",
+            f"$markerPath = {_ps_quote(str(marker_path))}",
             "New-Item -ItemType Directory -Force -Path (Split-Path $logPath) | Out-Null",
             "if (Test-Path $logPath) { Remove-Item $logPath -Force }",
+            "if (Test-Path $markerPath) { Remove-Item $markerPath -Force }",
             'Write-Host "[Executable Notes] 実行を開始します..."',
             'Write-Host "[Executable Notes] BAT: $batPath"',
             'Write-Host "[Executable Notes] LOG: $logPath"',
@@ -187,7 +193,9 @@ def _run_execute_mode(
             "$exitCode = $LASTEXITCODE",
             'Write-Host ""',
             'Write-Host "[Executable Notes] 実行が完了しました。ExitCode=$exitCode"',
-            "Start-Sleep -Seconds 3",
+            '"done" | Set-Content -Path $markerPath -Encoding UTF8',
+            'Write-Host "[Executable Notes] スクリーンショット取得待機中..."',
+            "Start-Sleep -Seconds 10",
             "exit $exitCode",
         ]
     )
@@ -223,7 +231,16 @@ def _run_execute_mode(
 
     watcher = threading.Thread(
         target=_watch_visible_execute_process,
-        args=(run.id, process, log_path, bat_path, ps1_path),
+        args=(
+            run.id,
+            run.note_id,
+            process,
+            log_path,
+            marker_path,
+            bat_path,
+            ps1_path,
+            window_title,
+        ),
         daemon=True,
     )
     watcher.start()
@@ -373,21 +390,41 @@ def _finish_execute_run(
 
 def _watch_visible_execute_process(
     run_id: int,
+    note_id: int,
     process: subprocess.Popen,
     log_path: Path,
+    marker_path: Path,
     bat_path: str,
     ps1_path: str,
+    window_title: str,
 ) -> None:
     offset = 0
     deadline = time.monotonic() + EXECUTE_TIMEOUT_SECONDS
     timed_out = False
+    screenshot_taken = False
 
     while process.poll() is None:
         text, offset = _read_new_log_text(log_path, offset)
         _append_stdout(run_id, text)
 
+        if marker_path.exists() and not screenshot_taken:
+            _capture_execute_screenshot(
+                run_id=run_id,
+                note_id=note_id,
+                window_title=window_title,
+            )
+            screenshot_taken = True
+
         if time.monotonic() > deadline:
             timed_out = True
+
+            _capture_execute_screenshot(
+                run_id=run_id,
+                note_id=note_id,
+                window_title=window_title,
+            )
+            screenshot_taken = True
+
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
                 capture_output=True,
@@ -402,10 +439,53 @@ def _watch_visible_execute_process(
     text, offset = _read_new_log_text(log_path, offset)
     _append_stdout(run_id, text)
 
+    if not screenshot_taken:
+        _capture_execute_screenshot(
+            run_id=run_id,
+            note_id=note_id,
+            window_title=window_title,
+        )
+
     _finish_execute_run(run_id, return_code, timed_out)
 
-    for temp_path in [bat_path, ps1_path]:
+    for temp_path in [bat_path, ps1_path, str(marker_path)]:
         try:
             Path(temp_path).unlink(missing_ok=True)
         except OSError:
             pass
+
+def _capture_execute_screenshot(
+    run_id: int,
+    note_id: int,
+    window_title: str,
+) -> None:
+    db = SessionLocal()
+
+    try:
+        screenshot = capture_window_screenshot_by_title(
+            db=db,
+            note_id=note_id,
+            window_title=window_title,
+            prefix=f"run_{run_id}",
+        )
+
+        run = db.get(NoteRun, run_id)
+
+        if run is None:
+            return
+
+        if screenshot is None:
+            run.stderr = (
+                (run.stderr or "")
+                + f"\nスクリーンショット対象ウィンドウが見つかりませんでした: {window_title}"
+            )
+        else:
+            run.stdout = (
+                (run.stdout or "")
+                + f"\n[Executable Notes] Screenshot saved: {screenshot.file_name}\n"
+            )
+
+        db.commit()
+
+    finally:
+        db.close()

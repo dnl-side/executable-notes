@@ -275,29 +275,6 @@ function App() {
     }
   }
 
-    async function handleCaptureScreenshot() {
-    if (selectedNoteId === null) {
-      setMessage("スクリーンショットを取得するノートを選択してください。");
-      return;
-    }
-
-    setLoading(true);
-    setMessage("");
-
-    try {
-      await captureNoteScreenshot(selectedNoteId);
-      const data = await fetchNoteScreenshots(selectedNoteId);
-      setScreenshots(data);
-      setShowScreenshots(true);
-      setMessage("スクリーンショットを取得しました。");
-    } catch (error) {
-      console.error(error);
-      setMessage("スクリーンショットの取得に失敗しました。");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   async function handleLoadScreenshots() {
     if (selectedNoteId === null) {
       setMessage("スクリーンショットを確認するノートを選択してください。");
@@ -475,14 +452,6 @@ function App() {
               disabled={selectedNoteId === null || loading}
             >
               停止
-            </button>
-                        <button
-              type="button"
-              className="screenshot"
-              onClick={handleCaptureScreenshot}
-              disabled={selectedNoteId === null || loading}
-            >
-              スクショ
             </button>
             <button
               type="button"

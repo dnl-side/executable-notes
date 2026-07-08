@@ -1,7 +1,9 @@
 from datetime import datetime
 from pathlib import Path
+import time
 
 import pyautogui
+import pygetwindow as gw
 from sqlalchemy.orm import Session
 
 from app.models import Note, NoteScreenshot
@@ -10,18 +12,19 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SCREENSHOT_DIR = BACKEND_ROOT / "storage" / "screenshots"
 
 
-def capture_note_screenshot(db: Session, note: Note) -> NoteScreenshot:
-    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
-
+def _build_screenshot_file_name(note_id: int, prefix: str = "note") -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"note_{note.id}_{timestamp}.png"
-    file_path = SCREENSHOT_DIR / file_name
+    return f"{prefix}_{note_id}_{timestamp}.png"
 
-    image = pyautogui.screenshot()
-    image.save(file_path)
 
+def _save_screenshot_record(
+    db: Session,
+    note_id: int,
+    file_name: str,
+    file_path: Path,
+) -> NoteScreenshot:
     screenshot = NoteScreenshot(
-        note_id=note.id,
+        note_id=note_id,
         file_name=file_name,
         file_path=str(file_path),
     )
@@ -31,3 +34,54 @@ def capture_note_screenshot(db: Session, note: Note) -> NoteScreenshot:
     db.refresh(screenshot)
 
     return screenshot
+
+
+def capture_note_screenshot(db: Session, note: Note) -> NoteScreenshot:
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    file_name = _build_screenshot_file_name(note.id, prefix="note")
+    file_path = SCREENSHOT_DIR / file_name
+
+    image = pyautogui.screenshot()
+    image.save(file_path)
+
+    return _save_screenshot_record(db, note.id, file_name, file_path)
+
+
+def capture_window_screenshot_by_title(
+    db: Session,
+    note_id: int,
+    window_title: str,
+    prefix: str,
+) -> NoteScreenshot | None:
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    windows = gw.getWindowsWithTitle(window_title)
+
+    if not windows:
+        return None
+
+    window = windows[0]
+
+    if window.isMinimized:
+        window.restore()
+        time.sleep(0.5)
+
+    try:
+        window.activate()
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+    left = max(window.left, 0)
+    top = max(window.top, 0)
+    width = max(window.width, 1)
+    height = max(window.height, 1)
+
+    file_name = _build_screenshot_file_name(note_id, prefix=prefix)
+    file_path = SCREENSHOT_DIR / file_name
+
+    image = pyautogui.screenshot(region=(left, top, width, height))
+    image.save(file_path)
+
+    return _save_screenshot_record(db, note_id, file_name, file_path)
