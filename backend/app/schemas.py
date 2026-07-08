@@ -62,6 +62,7 @@ class NoteRunResponse(BaseModel):
 class NoteScreenshotResponse(BaseModel):
     id: int
     note_id: int
+    run_id: int | None
     file_name: str
     file_path: str
     created_at: datetime

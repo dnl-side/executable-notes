@@ -79,7 +79,14 @@ function App() {
               />
             )}
 
-          {notesState.showRuns && <RunPanel runs={notesState.runs} />}
+          {notesState.showRuns && notesState.selectedNoteId !== null && (
+            <RunPanel
+              noteId={notesState.selectedNoteId}
+              runs={notesState.runs}
+              screenshots={notesState.screenshots}
+              onOpenScreenshot={notesState.setSelectedScreenshot}
+            />
+          )}
         </section>
       </section>
     </main>

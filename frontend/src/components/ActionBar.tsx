@@ -35,7 +35,7 @@ export function ActionBar({
         onClick={onApply}
         disabled={selectedNoteId === null || loading}
       >
-        適用
+        実行
       </button>
 
       <button

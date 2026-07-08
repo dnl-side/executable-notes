@@ -22,9 +22,11 @@ def _save_screenshot_record(
     note_id: int,
     file_name: str,
     file_path: Path,
+    run_id: int | None = None,
 ) -> NoteScreenshot:
     screenshot = NoteScreenshot(
         note_id=note_id,
+        run_id=run_id,
         file_name=file_name,
         file_path=str(file_path),
     )
@@ -53,6 +55,7 @@ def capture_window_screenshot_by_title(
     note_id: int,
     window_title: str,
     prefix: str,
+    run_id: int | None = None,
 ) -> NoteScreenshot | None:
     SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -92,4 +95,10 @@ def capture_window_screenshot_by_title(
     image = pyautogui.screenshot(region=(left, top, width, height))
     image.save(file_path)
 
-    return _save_screenshot_record(db, note_id, file_name, file_path)
+    return _save_screenshot_record(
+        db=db,
+        note_id=note_id,
+        file_name=file_name,
+        file_path=file_path,
+        run_id=run_id,
+    )

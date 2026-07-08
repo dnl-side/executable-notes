@@ -86,6 +86,11 @@ class NoteScreenshot(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     note_id: Mapped[int] = mapped_column(ForeignKey("notes.id"), nullable=False)
 
+    run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("note_runs.id"),
+        nullable=True,
+    )
+
     file_name: Mapped[str] = mapped_column(String(255), nullable=False)
     file_path: Mapped[str] = mapped_column(String(1000), nullable=False)
 

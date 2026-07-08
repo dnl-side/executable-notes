@@ -474,6 +474,7 @@ def _capture_execute_screenshot(
                 note_id=note_id,
                 window_title=window_title,
                 prefix=f"run_{run_id}",
+                run_id=run_id,
             )
         except Exception as error:
             screenshot = None

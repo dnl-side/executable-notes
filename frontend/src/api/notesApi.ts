@@ -82,6 +82,7 @@ export async function stopNote(noteId: number): Promise<NoteRun> {
 export interface NoteScreenshot {
   id: number;
   note_id: number;
+  run_id: number | null;
   file_name: string;
   file_path: string;
   created_at: string;

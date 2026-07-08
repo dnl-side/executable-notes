@@ -200,6 +200,7 @@ export function useExecutableNotes() {
 
       const data = await fetchNoteRuns(selectedNoteId);
       setRuns(data);
+      await loadScreenshots(selectedNoteId);
       setShowRuns(true);
     } catch (error) {
       console.error(error);
@@ -227,6 +228,7 @@ export function useExecutableNotes() {
     try {
       const data = await fetchNoteRuns(selectedNoteId);
       setRuns(data);
+      await loadScreenshots(selectedNoteId);
       setShowRuns(true);
       setMessage("ログを取得しました。");
     } catch (error) {
