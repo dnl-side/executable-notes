@@ -1,0 +1,5 @@
+fastapi[standard-no-fastapi-cloud-cli]
+sqlalchemy
+pydantic-settings
+python-multipart
+pyautogui
