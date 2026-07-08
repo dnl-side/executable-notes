@@ -107,3 +107,12 @@ export function getNoteScreenshotFileUrl(
 ): string {
   return `${API_BASE_URL}/notes/${noteId}/screenshots/${screenshotId}/file`;
 }
+
+export async function deleteNoteScreenshot(
+  noteId: number,
+  screenshotId: number,
+): Promise<void> {
+  await fetch(`${API_BASE_URL}/notes/${noteId}/screenshots/${screenshotId}`, {
+    method: "DELETE",
+  });
+}

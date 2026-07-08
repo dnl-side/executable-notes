@@ -59,6 +59,14 @@ def capture_window_screenshot_by_title(
     windows = gw.getWindowsWithTitle(window_title)
 
     if not windows:
+        all_windows = gw.getAllWindows()
+        windows = [
+            window
+            for window in all_windows
+            if window_title.lower() in (window.title or "").lower()
+        ]
+
+    if not windows:
         return None
 
     window = windows[0]
@@ -73,10 +81,10 @@ def capture_window_screenshot_by_title(
     except Exception:
         pass
 
-    left = max(window.left, 0)
-    top = max(window.top, 0)
-    width = max(window.width, 1)
-    height = max(window.height, 1)
+    left = max(int(window.left), 0)
+    top = max(int(window.top), 0)
+    width = max(int(window.width), 1)
+    height = max(int(window.height), 1)
 
     file_name = _build_screenshot_file_name(note_id, prefix=prefix)
     file_path = SCREENSHOT_DIR / file_name

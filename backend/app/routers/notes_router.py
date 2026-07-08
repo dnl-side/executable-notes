@@ -218,3 +218,37 @@ def get_note_screenshot_file(
         media_type="image/png",
         filename=screenshot.file_name,
     )
+
+@router.delete("/{note_id}/screenshots/{screenshot_id}")
+def delete_note_screenshot(
+    note_id: int,
+    screenshot_id: int,
+    db: Session = Depends(get_db),
+) -> dict[str, int | bool]:
+    screenshot = (
+        db.query(NoteScreenshot)
+        .filter(NoteScreenshot.id == screenshot_id)
+        .filter(NoteScreenshot.note_id == note_id)
+        .first()
+    )
+
+    if screenshot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Screenshot not found",
+        )
+
+    file_path = Path(screenshot.file_path)
+
+    db.delete(screenshot)
+    db.commit()
+
+    try:
+        file_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+    return {
+        "deleted": True,
+        "id": screenshot_id,
+    }

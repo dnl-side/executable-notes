@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
   applyNote,
-  captureNoteScreenshot,
   createNote,
   deleteNote,
+  deleteNoteScreenshot,
   fetchNoteRuns,
   fetchNoteScreenshots,
   fetchNotes,
@@ -44,6 +44,7 @@ function App() {
   const [showRuns, setShowRuns] = useState(false);
   const [screenshots, setScreenshots] = useState<NoteScreenshot[]>([]);
   const [showScreenshots, setShowScreenshots] = useState(false);
+  const [selectedScreenshot, setSelectedScreenshot] = useState<NoteScreenshot | null>(null);
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
@@ -88,6 +89,12 @@ function App() {
       try {
         const data = await fetchNoteRuns(selectedNoteId);
         setRuns(data);
+
+        const stillRunning = data.some((run) => run.status === "running");
+
+        if (!stillRunning) {
+          await loadScreenshots(selectedNoteId);
+        }
       } catch (error) {
         console.error(error);
       }
@@ -103,6 +110,7 @@ function App() {
     setShowRuns(false);
     setScreenshots([]);
     setShowScreenshots(false);
+    setSelectedScreenshot(null);
 
     if (selectedNote === null) {
       setForm(emptyForm);
@@ -275,6 +283,12 @@ function App() {
     }
   }
 
+  async function loadScreenshots(noteId: number) {
+    const data = await fetchNoteScreenshots(noteId);
+    setScreenshots(data);
+    return data;
+  }
+
   async function handleLoadScreenshots() {
     if (selectedNoteId === null) {
       setMessage("スクリーンショットを確認するノートを選択してください。");
@@ -283,6 +297,7 @@ function App() {
 
     if (showScreenshots) {
       setShowScreenshots(false);
+      setSelectedScreenshot(null);
       setMessage("スクリーンショットを非表示にしました。");
       return;
     }
@@ -291,13 +306,47 @@ function App() {
     setMessage("");
 
     try {
-      const data = await fetchNoteScreenshots(selectedNoteId);
-      setScreenshots(data);
+      await loadScreenshots(selectedNoteId);
       setShowScreenshots(true);
       setMessage("スクリーンショットを取得しました。");
     } catch (error) {
       console.error(error);
       setMessage("スクリーンショットの取得に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDeleteScreenshot(screenshotId: number) {
+    if (selectedNoteId === null) {
+      return;
+    }
+
+    const confirmed = window.confirm("このスクリーンショットを削除しますか？");
+
+    if (!confirmed) {
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await deleteNoteScreenshot(selectedNoteId, screenshotId);
+      const data = await loadScreenshots(selectedNoteId);
+
+      if (selectedScreenshot?.id === screenshotId) {
+        setSelectedScreenshot(null);
+      }
+
+      if (data.length === 0) {
+        setShowScreenshots(false);
+      }
+
+      setMessage("スクリーンショットを削除しました。");
+    } catch (error) {
+      console.error(error);
+      setMessage("スクリーンショットの削除に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -553,7 +602,16 @@ function App() {
 
           {showScreenshots && selectedNoteId !== null && (
             <section className="screenshot-panel">
-              <h2>スクリーンショット</h2>
+              <div className="panel-header">
+                <h2>スクリーンショット</h2>
+                <button
+                  type="button"
+                  onClick={() => void loadScreenshots(selectedNoteId)}
+                  disabled={loading}
+                >
+                  更新
+                </button>
+              </div>
 
               {screenshots.length === 0 && (
                 <p className="empty-message">スクリーンショットがありません。</p>
@@ -562,24 +620,79 @@ function App() {
               <div className="screenshot-grid">
                 {screenshots.map((screenshot) => (
                   <article key={screenshot.id} className="screenshot-card">
-                    <img
-                      src={getNoteScreenshotFileUrl(
-                        selectedNoteId,
-                        screenshot.id,
-                      )}
-                      alt={screenshot.file_name}
-                    />
+                    <button
+                      type="button"
+                      className="screenshot-preview"
+                      onClick={() => setSelectedScreenshot(screenshot)}
+                    >
+                      <img
+                        src={getNoteScreenshotFileUrl(selectedNoteId, screenshot.id)}
+                        alt={screenshot.file_name}
+                      />
+                    </button>
+
                     <div>
                       <strong>{screenshot.file_name}</strong>
-                      <span>
-                        {new Date(screenshot.created_at).toLocaleString()}
-                      </span>
+                      <span>{new Date(screenshot.created_at).toLocaleString()}</span>
+                    </div>
+
+                    <div className="screenshot-actions">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedScreenshot(screenshot)}
+                      >
+                        拡大
+                      </button>
+                      <button
+                        type="button"
+                        className="danger-small"
+                        onClick={() => void handleDeleteScreenshot(screenshot.id)}
+                        disabled={loading}
+                      >
+                        削除
+                      </button>
                     </div>
                   </article>
                 ))}
               </div>
             </section>
-          )}          
+          )}
+          {selectedScreenshot !== null && selectedNoteId !== null && (
+          <div
+            className="screenshot-modal"
+            role="dialog"
+            aria-modal="true"
+            onClick={() => setSelectedScreenshot(null)}
+          >
+            <div
+              className="screenshot-modal-content"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="screenshot-modal-header">
+                <strong>{selectedScreenshot.file_name}</strong>
+                <button type="button" onClick={() => setSelectedScreenshot(null)}>
+                  閉じる
+                </button>
+              </div>
+
+              <img
+                src={getNoteScreenshotFileUrl(selectedNoteId, selectedScreenshot.id)}
+                alt={selectedScreenshot.file_name}
+              />
+
+              <div className="screenshot-modal-actions">
+                <button
+                  type="button"
+                  className="danger-small"
+                  onClick={() => void handleDeleteScreenshot(selectedScreenshot.id)}
+                  disabled={loading}
+                >
+                  削除
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         </section>
       </section>
     </main>

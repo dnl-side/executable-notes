@@ -118,3 +118,116 @@ code {
   background: #dc2626;
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.panel-header h2 {
+  margin: 0;
+}
+
+.panel-header button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  background: #2563eb;
+  font-weight: 700;
+}
+
+.screenshot-preview {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.screenshot-preview img,
+.screenshot-card img {
+  display: block;
+  width: 100%;
+  height: 160px;
+  object-fit: cover;
+  background: #111827;
+}
+
+.screenshot-actions {
+  display: flex;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
+.screenshot-actions button,
+.screenshot-modal-actions button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: white;
+  background: #2563eb;
+  font-weight: 700;
+}
+
+.screenshot-actions .danger-small,
+.screenshot-modal-actions .danger-small {
+  background: #dc2626;
+}
+
+.screenshot-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(15 23 42 / 70%);
+}
+
+.screenshot-modal-content {
+  width: min(1100px, 95vw);
+  max-height: 92vh;
+  overflow: auto;
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 35%);
+}
+
+.screenshot-modal-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.screenshot-modal-header button {
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: white;
+  background: #4b5563;
+  font-weight: 700;
+}
+
+.screenshot-modal-content img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #111827;
+}
+
+.screenshot-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 16px 16px;
+}

@@ -193,9 +193,11 @@ def _run_execute_mode(
             "$exitCode = $LASTEXITCODE",
             'Write-Host ""',
             'Write-Host "[Executable Notes] 実行が完了しました。ExitCode=$exitCode"',
+            f"[Console]::Title = {_ps_quote(window_title)}",
+            f"cmd.exe /c title {window_title}",
             '"done" | Set-Content -Path $markerPath -Encoding UTF8',
             'Write-Host "[Executable Notes] スクリーンショット取得待機中..."',
-            "Start-Sleep -Seconds 10",
+            "Start-Sleep -Seconds 15",
             "exit $exitCode",
         ]
     )
@@ -408,6 +410,10 @@ def _watch_visible_execute_process(
         _append_stdout(run_id, text)
 
         if marker_path.exists() and not screenshot_taken:
+            _append_stdout(
+                run_id,
+                f"\n[Executable Notes] Screenshot marker detected: {marker_path}\n",
+            )
             _capture_execute_screenshot(
                 run_id=run_id,
                 note_id=note_id,
@@ -462,12 +468,18 @@ def _capture_execute_screenshot(
     db = SessionLocal()
 
     try:
-        screenshot = capture_window_screenshot_by_title(
-            db=db,
-            note_id=note_id,
-            window_title=window_title,
-            prefix=f"run_{run_id}",
-        )
+        try:
+            screenshot = capture_window_screenshot_by_title(
+                db=db,
+                note_id=note_id,
+                window_title=window_title,
+                prefix=f"run_{run_id}",
+            )
+        except Exception as error:
+            screenshot = None
+            capture_error = str(error)
+        else:
+            capture_error = ""
 
         run = db.get(NoteRun, run_id)
 
@@ -475,10 +487,15 @@ def _capture_execute_screenshot(
             return
 
         if screenshot is None:
-            run.stderr = (
-                (run.stderr or "")
-                + f"\nスクリーンショット対象ウィンドウが見つかりませんでした: {window_title}"
+            detail = (
+                f"\nスクリーンショット取得に失敗しました。"
+                f"\n対象ウィンドウ: {window_title}"
             )
+
+            if capture_error:
+                detail += f"\n原因: {capture_error}"
+
+            run.stderr = (run.stderr or "") + detail
         else:
             run.stdout = (
                 (run.stdout or "")
