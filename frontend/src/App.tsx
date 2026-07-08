@@ -306,9 +306,14 @@ function App() {
     setMessage("");
 
     try {
-      await loadScreenshots(selectedNoteId);
+      const data = await loadScreenshots(selectedNoteId);
       setShowScreenshots(true);
-      setMessage("スクリーンショットを取得しました。");
+
+      if (data.length === 0) {
+        setMessage(`ノート #${selectedNoteId} のスクリーンショットはありません。`);
+      } else {
+        setMessage(`スクリーンショットを取得しました。${data.length}件`);
+      }
     } catch (error) {
       console.error(error);
       setMessage("スクリーンショットの取得に失敗しました。");
@@ -384,7 +389,7 @@ function App() {
               }
               onClick={() => setSelectedNoteId(note.id)}
             >
-              <strong>{note.title}</strong>
+              <strong>#{note.id} {note.title}</strong>
               <span>{note.note_type} / {note.run_mode}</span>
             </button>
           ))}
@@ -529,77 +534,7 @@ function App() {
           </div>
 
           {message && <p className="status-message">{message}</p>}
-
-          {showRuns && (
-            <section className="run-panel">
-              <h2>実行ログ</h2>
-
-              {runs.length === 0 && (
-                <p className="empty-message">実行履歴がありません。</p>
-              )}
-
-              {runs.map((run) => (
-                <article key={run.id} className="run-card">
-                  <div className="run-card-header">
-                    <strong>
-                      #{run.id} / {run.status}
-                    </strong>
-                    <span>{new Date(run.started_at).toLocaleString()}</span>
-                  </div>
-
-                  <dl className="run-meta">
-                    <div>
-                      <dt>mode</dt>
-                      <dd>{run.run_mode}</dd>
-                    </div>
-                    <div>
-                      <dt>pid</dt>
-                      <dd>{run.pid ?? "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>return</dt>
-                      <dd>{run.return_code ?? "-"}</dd>
-                    </div>
-                    <div>
-                      <dt>finished</dt>
-                      <dd>
-                        {run.finished_at
-                          ? new Date(run.finished_at).toLocaleString()
-                          : "-"}
-                      </dd>
-                    </div>
-                  </dl>
-
-                  <div className="run-command">
-                    <strong>command</strong>
-                    <pre>{run.command}</pre>
-                  </div>
-
-                  {run.working_directory && (
-                    <div className="run-command">
-                      <strong>working directory</strong>
-                      <pre>{run.working_directory}</pre>
-                    </div>
-                  )}
-
-                  {run.stdout && (
-                    <details open>
-                      <summary>stdout</summary>
-                      <pre>{run.stdout}</pre>
-                    </details>
-                  )}
-
-                  {run.stderr && (
-                    <details open>
-                      <summary>stderr</summary>
-                      <pre>{run.stderr}</pre>
-                    </details>
-                  )}
-                </article>
-              ))}
-            </section>
-          )}
-
+          
           {showScreenshots && selectedNoteId !== null && (
             <section className="screenshot-panel">
               <div className="panel-header">
@@ -692,7 +627,79 @@ function App() {
               </div>
             </div>
           </div>
-        )}
+          )}
+
+          {showRuns && (
+            <section className="run-panel">
+              <h2>実行ログ</h2>
+
+              {runs.length === 0 && (
+                <p className="empty-message">実行履歴がありません。</p>
+              )}
+
+              {runs.map((run) => (
+                <article key={run.id} className="run-card">
+                  <div className="run-card-header">
+                    <strong>
+                      #{run.id} / {run.status}
+                    </strong>
+                    <span>{new Date(run.started_at).toLocaleString()}</span>
+                  </div>
+
+                  <dl className="run-meta">
+                    <div>
+                      <dt>mode</dt>
+                      <dd>{run.run_mode}</dd>
+                    </div>
+                    <div>
+                      <dt>pid</dt>
+                      <dd>{run.pid ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>return</dt>
+                      <dd>{run.return_code ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>finished</dt>
+                      <dd>
+                        {run.finished_at
+                          ? new Date(run.finished_at).toLocaleString()
+                          : "-"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="run-command">
+                    <strong>command</strong>
+                    <pre>{run.command}</pre>
+                  </div>
+
+                  {run.working_directory && (
+                    <div className="run-command">
+                      <strong>working directory</strong>
+                      <pre>{run.working_directory}</pre>
+                    </div>
+                  )}
+
+                  {run.stdout && (
+                    <details open>
+                      <summary>stdout</summary>
+                      <pre>{run.stdout}</pre>
+                    </details>
+                  )}
+
+                  {run.stderr && (
+                    <details open>
+                      <summary>stderr</summary>
+                      <pre>{run.stderr}</pre>
+                    </details>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
+
+
         </section>
       </section>
     </main>
