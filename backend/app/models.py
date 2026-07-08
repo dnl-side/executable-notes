@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -40,3 +40,35 @@ class Note(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+    runs: Mapped[list["NoteRun"]] = relationship(
+        back_populates="note",
+        cascade="all, delete-orphan",
+    )
+
+
+class NoteRun(Base):
+    __tablename__ = "note_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    note_id: Mapped[int] = mapped_column(ForeignKey("notes.id"), nullable=False)
+
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="running")
+    run_mode: Mapped[str] = mapped_column(String(30), nullable=False)
+    command: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    working_directory: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    pid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    return_code: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    stdout: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    stderr: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    note: Mapped[Note] = relationship(back_populates="runs")

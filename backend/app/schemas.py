@@ -41,3 +41,20 @@ class NoteResponse(NoteBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NoteRunResponse(BaseModel):
+    id: int
+    note_id: int
+    status: str
+    run_mode: str
+    command: str
+    working_directory: str | None
+    pid: int | None
+    return_code: int | None
+    stdout: str
+    stderr: str
+    started_at: datetime
+    finished_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)

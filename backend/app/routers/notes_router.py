@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Note
-from app.schemas import NoteCreate, NoteResponse, NoteUpdate
+from app.models import Note, NoteRun
+from app.schemas import NoteCreate, NoteResponse, NoteRunResponse, NoteUpdate
+from app.services.execution_service import execute_note
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
@@ -76,3 +77,40 @@ def delete_note(note_id: int, db: Session = Depends(get_db)) -> dict[str, int | 
         "deleted": True,
         "id": note_id,
     }
+
+
+@router.post("/{note_id}/apply", response_model=NoteRunResponse)
+def apply_note(note_id: int, db: Session = Depends(get_db)) -> NoteRun:
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    try:
+        return execute_note(db, note)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
+
+
+@router.get("/{note_id}/runs", response_model=list[NoteRunResponse])
+def list_note_runs(note_id: int, db: Session = Depends(get_db)) -> list[NoteRun]:
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    return (
+        db.query(NoteRun)
+        .filter(NoteRun.note_id == note_id)
+        .order_by(NoteRun.started_at.desc())
+        .all()
+    )

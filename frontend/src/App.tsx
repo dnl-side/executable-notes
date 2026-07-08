@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import {
+  applyNote,
   createNote,
   deleteNote,
   fetchNotes,
@@ -157,6 +158,26 @@ function App() {
     }));
   }
 
+    async function handleApply() {
+    if (selectedNoteId === null) {
+      setMessage("実行するノートを選択してください。");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const run = await applyNote(selectedNoteId);
+      setMessage(`実行しました。status=${run.status}, pid=${run.pid ?? "-"}`);
+    } catch (error) {
+      console.error(error);
+      setMessage("実行に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -290,6 +311,14 @@ function App() {
           <div className="actions">
             <button type="button" onClick={handleSave} disabled={loading}>
               保存
+            </button>
+            <button
+              type="button"
+              className="apply"
+              onClick={handleApply}
+              disabled={selectedNoteId === null || loading}
+            >
+              適用
             </button>
             <button
               type="button"

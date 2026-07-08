@@ -48,3 +48,28 @@ export async function deleteNote(noteId: number): Promise<void> {
     method: "DELETE",
   });
 }
+
+export interface NoteRun {
+  id: number;
+  note_id: number;
+  status: string;
+  run_mode: string;
+  command: string;
+  working_directory: string | null;
+  pid: number | null;
+  return_code: number | null;
+  stdout: string;
+  stderr: string;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export async function applyNote(noteId: number): Promise<NoteRun> {
+  return request<NoteRun>(`/notes/${noteId}/apply`, {
+    method: "POST",
+  });
+}
+
+export async function fetchNoteRuns(noteId: number): Promise<NoteRun[]> {
+  return request<NoteRun[]>(`/notes/${noteId}/runs`);
+}

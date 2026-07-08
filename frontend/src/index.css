@@ -109,3 +109,12 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+.actions .apply {
+  background: #16a34a;
+}
+
+.actions .danger {
+  background: #dc2626;
+}
+
