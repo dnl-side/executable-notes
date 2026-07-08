@@ -73,3 +73,9 @@ export async function applyNote(noteId: number): Promise<NoteRun> {
 export async function fetchNoteRuns(noteId: number): Promise<NoteRun[]> {
   return request<NoteRun[]>(`/notes/${noteId}/runs`);
 }
+
+export async function stopNote(noteId: number): Promise<NoteRun> {
+  return request<NoteRun>(`/notes/${noteId}/stop`, {
+    method: "POST",
+  });
+}

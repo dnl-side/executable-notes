@@ -186,3 +186,54 @@ def _run_launch_mode(
                 + f"\nURLの起動待機がタイムアウトしました: {open_url}"
             )
             db.commit()
+
+def _is_process_running(pid: int) -> bool:
+    result = subprocess.run(
+        ["tasklist", "/FI", f"PID eq {pid}"],
+        capture_output=True,
+        text=True,
+    )
+
+    return str(pid) in result.stdout            
+
+def stop_note(db: Session, note: Note) -> NoteRun:
+    run = (
+        db.query(NoteRun)
+        .filter(NoteRun.note_id == note.id)
+        .filter(NoteRun.status.in_(["launched", "running"]))
+        .filter(NoteRun.pid.isnot(None))
+        .order_by(NoteRun.started_at.desc())
+        .first()
+    )
+
+    if run is None:
+        raise ValueError("停止対象の実行中プロセスがありません。")
+
+    result = subprocess.run(
+        ["taskkill", "/PID", str(run.pid), "/T", "/F"],
+        capture_output=True,
+        text=True,
+    )
+
+    time.sleep(1)
+
+    process_still_running = _is_process_running(run.pid)
+    stdout_upper = result.stdout.upper()
+
+    taskkill_success = (
+        result.returncode == 0
+        or "SUCCESS:" in stdout_upper
+        or "成功" in result.stdout
+        or not process_still_running
+    )
+
+    run.return_code = result.returncode
+    run.stdout = (run.stdout or "") + result.stdout
+    run.stderr = (run.stderr or "") + result.stderr
+    run.status = "stopped" if taskkill_success else "failed"
+    run.finished_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(run)
+
+    return run

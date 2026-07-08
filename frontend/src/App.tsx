@@ -4,8 +4,11 @@ import {
   applyNote,
   createNote,
   deleteNote,
+  fetchNoteRuns,
   fetchNotes,
+  stopNote,
   updateNote,
+  type NoteRun,
 } from "./api/notesApi";
 import type { DefaultShell, Note, NotePayload, NoteType, RunMode } from "./types/note";
 
@@ -33,6 +36,8 @@ function App() {
   const [form, setForm] = useState<NotePayload>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [runs, setRuns] = useState<NoteRun[]>([]);
+  const [showRuns, setShowRuns] = useState(false);
 
   const selectedNote = useMemo(
     () => notes.find((note) => note.id === selectedNoteId) ?? null,
@@ -63,6 +68,9 @@ function App() {
   }, []);
 
   useEffect(() => {
+    setRuns([]);
+    setShowRuns(false);
+
     if (selectedNote === null) {
       setForm(emptyForm);
       return;
@@ -158,7 +166,7 @@ function App() {
     }));
   }
 
-    async function handleApply() {
+  async function handleApply() {
     if (selectedNoteId === null) {
       setMessage("実行するノートを選択してください。");
       return;
@@ -170,9 +178,65 @@ function App() {
     try {
       const run = await applyNote(selectedNoteId);
       setMessage(`実行しました。status=${run.status}, pid=${run.pid ?? "-"}`);
+
+      const data = await fetchNoteRuns(selectedNoteId);
+      setRuns(data);
+      setShowRuns(true);
     } catch (error) {
       console.error(error);
       setMessage("実行に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadRuns() {
+    if (selectedNoteId === null) {
+      setMessage("ログを確認するノートを選択してください。");
+      return;
+    }
+
+    if (showRuns) {
+      setShowRuns(false);
+      setMessage("ログを非表示にしました。");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const data = await fetchNoteRuns(selectedNoteId);
+      setRuns(data);
+      setShowRuns(true);
+      setMessage("ログを取得しました。");
+    } catch (error) {
+      console.error(error);
+      setMessage("ログの取得に失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleStop() {
+    if (selectedNoteId === null) {
+      setMessage("停止するノートを選択してください。");
+      return;
+    }
+
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const run = await stopNote(selectedNoteId);
+      setMessage(`停止しました。status=${run.status}, pid=${run.pid ?? "-"}`);
+
+      const data = await fetchNoteRuns(selectedNoteId);
+      setRuns(data);
+      setShowRuns(true);
+    } catch (error) {
+      console.error(error);
+      setMessage("停止に失敗しました。");
     } finally {
       setLoading(false);
     }
@@ -308,7 +372,7 @@ function App() {
             />
           </div>
 
-          <div className="actions">
+                    <div className="actions">
             <button type="button" onClick={handleSave} disabled={loading}>
               保存
             </button>
@@ -322,6 +386,22 @@ function App() {
             </button>
             <button
               type="button"
+              className="stop"
+              onClick={handleStop}
+              disabled={selectedNoteId === null || loading}
+            >
+              停止
+            </button>
+            <button
+              type="button"
+              className="logs"
+              onClick={handleLoadRuns}
+              disabled={selectedNoteId === null || loading}
+            >
+              {showRuns ? "ログ非表示" : "ログ確認"}
+            </button>
+            <button
+              type="button"
               className="danger"
               onClick={handleDelete}
               disabled={selectedNoteId === null || loading}
@@ -331,6 +411,76 @@ function App() {
           </div>
 
           {message && <p className="status-message">{message}</p>}
+
+          {showRuns && (
+            <section className="run-panel">
+              <h2>実行ログ</h2>
+
+              {runs.length === 0 && (
+                <p className="empty-message">実行履歴がありません。</p>
+              )}
+
+              {runs.map((run) => (
+                <article key={run.id} className="run-card">
+                  <div className="run-card-header">
+                    <strong>
+                      #{run.id} / {run.status}
+                    </strong>
+                    <span>{new Date(run.started_at).toLocaleString()}</span>
+                  </div>
+
+                  <dl className="run-meta">
+                    <div>
+                      <dt>mode</dt>
+                      <dd>{run.run_mode}</dd>
+                    </div>
+                    <div>
+                      <dt>pid</dt>
+                      <dd>{run.pid ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>return</dt>
+                      <dd>{run.return_code ?? "-"}</dd>
+                    </div>
+                    <div>
+                      <dt>finished</dt>
+                      <dd>
+                        {run.finished_at
+                          ? new Date(run.finished_at).toLocaleString()
+                          : "-"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="run-command">
+                    <strong>command</strong>
+                    <pre>{run.command}</pre>
+                  </div>
+
+                  {run.working_directory && (
+                    <div className="run-command">
+                      <strong>working directory</strong>
+                      <pre>{run.working_directory}</pre>
+                    </div>
+                  )}
+
+                  {run.stdout && (
+                    <details open>
+                      <summary>stdout</summary>
+                      <pre>{run.stdout}</pre>
+                    </details>
+                  )}
+
+                  {run.stderr && (
+                    <details open>
+                      <summary>stderr</summary>
+                      <pre>{run.stderr}</pre>
+                    </details>
+                  )}
+                </article>
+              ))}
+            </section>
+          )}
         </section>
       </section>
     </main>

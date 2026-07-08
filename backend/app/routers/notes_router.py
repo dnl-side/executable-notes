@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Note, NoteRun
 from app.schemas import NoteCreate, NoteResponse, NoteRunResponse, NoteUpdate
-from app.services.execution_service import execute_note
+from app.services.execution_service import execute_note, stop_note
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
 
@@ -114,3 +114,21 @@ def list_note_runs(note_id: int, db: Session = Depends(get_db)) -> list[NoteRun]
         .order_by(NoteRun.started_at.desc())
         .all()
     )
+
+@router.post("/{note_id}/stop", response_model=NoteRunResponse)
+def stop_note_process(note_id: int, db: Session = Depends(get_db)) -> NoteRun:
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found",
+        )
+
+    try:
+        return stop_note(db, note)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error),
+        ) from error
