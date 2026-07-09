@@ -11,7 +11,7 @@ from urllib.request import Request, urlopen
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Note, NoteRun
+from app.models import Note, NoteRun, NoteScreenshot
 from app.services.screenshot_service import capture_window_screenshot_by_title
 
 EXECUTE_TIMEOUT_SECONDS = 900
@@ -410,6 +410,7 @@ def _watch_visible_execute_process(
         _append_stdout(run_id, text)
 
         if marker_path.exists() and not screenshot_taken:
+            screenshot_taken = True
             _append_stdout(
                 run_id,
                 f"\n[Executable Notes] Screenshot marker detected: {marker_path}\n",
@@ -419,17 +420,16 @@ def _watch_visible_execute_process(
                 note_id=note_id,
                 window_title=window_title,
             )
-            screenshot_taken = True
 
         if time.monotonic() > deadline:
             timed_out = True
 
+            screenshot_taken = True
             _capture_execute_screenshot(
                 run_id=run_id,
                 note_id=note_id,
                 window_title=window_title,
             )
-            screenshot_taken = True
 
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
@@ -468,6 +468,15 @@ def _capture_execute_screenshot(
     db = SessionLocal()
 
     try:
+        existing_screenshot = (
+            db.query(NoteScreenshot)
+            .filter(NoteScreenshot.run_id == run_id)
+            .first()
+        )
+
+        if existing_screenshot is not None:
+            return
+
         try:
             screenshot = capture_window_screenshot_by_title(
                 db=db,

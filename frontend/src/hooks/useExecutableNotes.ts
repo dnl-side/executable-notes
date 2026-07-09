@@ -82,15 +82,7 @@ export function useExecutableNotes() {
         const stillRunning = data.some((run) => run.status === "running");
 
         if (!stillRunning) {
-          await loadScreenshots(selectedNoteId);
-
-          window.setTimeout(() => {
-            void loadScreenshots(selectedNoteId);
-          }, 1500);
-
-          window.setTimeout(() => {
-            void loadScreenshots(selectedNoteId);
-          }, 3500);
+          refreshScreenshotsAfterRun(selectedNoteId);
         }
       } catch (error) {
         console.error(error);
@@ -208,7 +200,7 @@ export function useExecutableNotes() {
 
       const data = await fetchNoteRuns(selectedNoteId);
       setRuns(data);
-      await loadScreenshots(selectedNoteId);
+      refreshScreenshotsAfterRun(selectedNoteId);
       setShowRuns(true);
     } catch (error) {
       console.error(error);
@@ -276,6 +268,18 @@ export function useExecutableNotes() {
     setScreenshots(data);
     return data;
   }
+
+  function refreshScreenshotsAfterRun(noteId: number) {
+    void loadScreenshots(noteId);
+
+    window.setTimeout(() => {
+      void loadScreenshots(noteId);
+    }, 1500);
+
+    window.setTimeout(() => {
+      void loadScreenshots(noteId);
+    }, 3500);
+  }  
 
   async function handleLoadScreenshots() {
     if (selectedNoteId === null) {
