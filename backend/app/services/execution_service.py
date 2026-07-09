@@ -87,9 +87,6 @@ def cleanup_old_note_runs(
     runs_to_delete = all_runs[keep_count:]
 
     for old_run in runs_to_delete:
-        if old_run.status == "running":
-            continue
-
         screenshots = (
             db.query(NoteScreenshot)
             .filter(NoteScreenshot.run_id == old_run.id)

@@ -14,6 +14,7 @@ from app.schemas import (
     NoteUpdate,
 )
 from app.services.execution_service import (
+    RUN_LOG_RETENTION_COUNT,
     cleanup_old_note_runs,
     execute_note,
     stop_note,
@@ -128,6 +129,7 @@ def list_note_runs(note_id: int, db: Session = Depends(get_db)) -> list[NoteRun]
         db.query(NoteRun)
         .filter(NoteRun.note_id == note_id)
         .order_by(NoteRun.started_at.desc())
+        .limit(RUN_LOG_RETENTION_COUNT)
         .all()
     )
 
