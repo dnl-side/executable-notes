@@ -114,3 +114,50 @@ def capture_window_screenshot_by_title(
         file_path=file_path,
         run_id=run_id,
     )
+
+def capture_active_window_screenshot_for_run(
+    db: Session,
+    note_id: int,
+    run_id: int,
+    prefix: str,
+) -> NoteScreenshot:
+    SCREENSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    window = gw.getActiveWindow()
+
+    file_name = _build_screenshot_file_name(
+        note_id=note_id,
+        prefix=prefix,
+        include_note_id=False,
+    )
+    file_path = SCREENSHOT_DIR / file_name
+
+    if window is None:
+        image = pyautogui.screenshot()
+        image.save(file_path)
+    else:
+        if window.isMinimized:
+            window.restore()
+            time.sleep(0.5)
+
+        try:
+            window.activate()
+            time.sleep(0.5)
+        except Exception:
+            pass
+
+        left = max(int(window.left), 0)
+        top = max(int(window.top), 0)
+        width = max(int(window.width), 1)
+        height = max(int(window.height), 1)
+
+        image = pyautogui.screenshot(region=(left, top, width, height))
+        image.save(file_path)
+
+    return _save_screenshot_record(
+        db=db,
+        note_id=note_id,
+        file_name=file_name,
+        file_path=file_path,
+        run_id=run_id,
+    )

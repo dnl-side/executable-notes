@@ -12,7 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
 from app.models import Note, NoteRun, NoteScreenshot
-from app.services.screenshot_service import capture_window_screenshot_by_title
+from app.services.screenshot_service import (
+    capture_active_window_screenshot_for_run,
+    capture_window_screenshot_by_title,
+)
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = BACKEND_ROOT / "storage" / "logs"
@@ -433,10 +436,34 @@ def _run_launch_mode(
 
         if is_ready:
             _open_edge(note.open_url)
+
             run.stdout = (
                 (run.stdout or "")
                 + f"[Executable Notes] URL opened: {note.open_url}\n"
             )
+            db.commit()
+
+            if note.take_screenshot_on_finish:
+                time.sleep(max(int(note.console_wait_seconds or 3), 1))
+
+                try:
+                    screenshot = capture_active_window_screenshot_for_run(
+                        db=db,
+                        note_id=note.id,
+                        run_id=run.id,
+                        prefix=f"launch_{run.id}",
+                    )
+                    run.stdout = (
+                        (run.stdout or "")
+                        + f"[Executable Notes] Launch screenshot saved: {screenshot.file_name}\n"
+                    )
+                except Exception as error:
+                    run.stderr = (
+                        (run.stderr or "")
+                        + f"\n[Executable Notes] Launch screenshot failed: {error}"
+                    )
+
+                db.commit()
         else:
             run.stderr = (
                 (run.stderr or "")
