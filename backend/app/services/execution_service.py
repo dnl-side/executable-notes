@@ -196,11 +196,12 @@ def _run_execute_mode(
         after_finish_lines.append("exit $exitCode")
     else:
         after_finish_lines.append(
-            'Write-Host "[Executable Notes] Console will remain open."'
+            'Write-Host "[Executable Notes] Interactive console is ready."'
         )
         after_finish_lines.append(
-            'Read-Host "[Executable Notes] Press Enter to close this console"'
+            'Write-Host "[Executable Notes] Type exit to close this console."'
         )
+        after_finish_lines.append("cmd.exe /k")
         after_finish_lines.append("exit $exitCode")
 
     ps_script = "\n".join(
@@ -378,7 +379,7 @@ def stop_note(db: Session, note: Note) -> NoteRun:
     run = (
         db.query(NoteRun)
         .filter(NoteRun.note_id == note.id)
-        .filter(NoteRun.status.in_(["launched", "running"]))
+        .filter(NoteRun.status.in_(["launched", "running", "interactive"]))
         .filter(NoteRun.pid.isnot(None))
         .order_by(NoteRun.started_at.desc())
         .first()
@@ -482,6 +483,29 @@ def _read_marker_exit_code(marker_path: Path) -> int:
         return int(text)
     except (OSError, ValueError):
         return -1
+    
+def _mark_execute_run_interactive(
+    run_id: int,
+    return_code: int,
+) -> None:
+    db = SessionLocal()
+
+    try:
+        run = db.get(NoteRun, run_id)
+
+        if run is None:
+            return
+
+        run.return_code = return_code
+        run.status = "interactive"
+        run.stdout = (
+            (run.stdout or "")
+            + "\n[Executable Notes] Interactive console is ready.\n"
+        )
+        db.commit()
+
+    finally:
+        db.close()
 
 def _watch_visible_execute_process(
     run_id: int,
@@ -500,13 +524,14 @@ def _watch_visible_execute_process(
     deadline = time.monotonic() + timeout_seconds
     timed_out = False
     screenshot_taken = False
-    run_finished_by_marker = False
+    marker_detected = False
 
     while process.poll() is None:
         text, offset = _read_new_log_text(log_path, offset)
         _append_stdout(run_id, text)
 
-        if marker_path.exists() and not screenshot_taken:
+        if marker_path.exists() and not marker_detected:
+            marker_detected = True
             screenshot_taken = True
 
             if take_screenshot_on_finish:
@@ -522,16 +547,12 @@ def _watch_visible_execute_process(
 
             if not close_console:
                 return_code = _read_marker_exit_code(marker_path)
-                _finish_execute_run(
+                _mark_execute_run_interactive(
                     run_id=run_id,
                     return_code=return_code,
-                    timed_out=False,
-                    timeout_seconds=timeout_seconds,
                 )
-                run_finished_by_marker = True
-                break
 
-        if time.monotonic() > deadline:
+        if not marker_detected and time.monotonic() > deadline:
             timed_out = True
             screenshot_taken = True
 
@@ -550,9 +571,6 @@ def _watch_visible_execute_process(
             break
 
         time.sleep(1)
-
-    if run_finished_by_marker:
-        return
 
     return_code = process.wait()
 
