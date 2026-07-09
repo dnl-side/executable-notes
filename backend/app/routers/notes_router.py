@@ -13,7 +13,11 @@ from app.schemas import (
     NoteScreenshotResponse,
     NoteUpdate,
 )
-from app.services.execution_service import execute_note, stop_note
+from app.services.execution_service import (
+    cleanup_old_note_runs,
+    execute_note,
+    stop_note,
+)
 from app.services.screenshot_service import capture_note_screenshot
 
 router = APIRouter(prefix="/api/notes", tags=["notes"])
@@ -117,6 +121,8 @@ def list_note_runs(note_id: int, db: Session = Depends(get_db)) -> list[NoteRun]
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Note not found",
         )
+
+    cleanup_old_note_runs(db, note_id)
 
     return (
         db.query(NoteRun)
