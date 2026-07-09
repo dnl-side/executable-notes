@@ -12,9 +12,17 @@ BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SCREENSHOT_DIR = BACKEND_ROOT / "storage" / "screenshots"
 
 
-def _build_screenshot_file_name(note_id: int, prefix: str = "note") -> str:
+def _build_screenshot_file_name(
+    note_id: int,
+    prefix: str = "note",
+    include_note_id: bool = True,
+) -> str:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefix}_{note_id}_{timestamp}.png"
+
+    if include_note_id:
+        return f"{prefix}_{note_id}_{timestamp}.png"
+
+    return f"{prefix}_{timestamp}.png"
 
 
 def _save_screenshot_record(
@@ -89,7 +97,11 @@ def capture_window_screenshot_by_title(
     width = max(int(window.width), 1)
     height = max(int(window.height), 1)
 
-    file_name = _build_screenshot_file_name(note_id, prefix=prefix)
+    file_name = _build_screenshot_file_name(
+        note_id=note_id,
+        prefix=prefix,
+        include_note_id=False,
+    )
     file_path = SCREENSHOT_DIR / file_name
 
     image = pyautogui.screenshot(region=(left, top, width, height))

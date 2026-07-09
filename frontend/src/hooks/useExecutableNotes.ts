@@ -83,6 +83,14 @@ export function useExecutableNotes() {
 
         if (!stillRunning) {
           await loadScreenshots(selectedNoteId);
+
+          window.setTimeout(() => {
+            void loadScreenshots(selectedNoteId);
+          }, 1500);
+
+          window.setTimeout(() => {
+            void loadScreenshots(selectedNoteId);
+          }, 3500);
         }
       } catch (error) {
         console.error(error);
