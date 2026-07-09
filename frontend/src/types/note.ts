@@ -13,6 +13,11 @@ export interface Note {
   default_shell: DefaultShell;
   run_mode: RunMode;
   open_url: string | null;
+  timeout_seconds: number;
+  take_screenshot_on_finish: boolean;
+  console_wait_seconds: number;
+  show_console: boolean;
+  close_console: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -25,4 +30,9 @@ export interface NotePayload {
   default_shell: DefaultShell;
   run_mode: RunMode;
   open_url: string | null;
+  timeout_seconds: number;
+  take_screenshot_on_finish: boolean;
+  console_wait_seconds: number;
+  show_console: boolean;
+  close_console: boolean;
 }

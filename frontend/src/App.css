@@ -898,3 +898,37 @@ body {
   font-size: 11px;
   overflow-wrap: anywhere;
 }
+
+.note-settings {
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--panel-soft);
+}
+
+.note-settings h3 {
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.settings-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.settings-grid label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings-grid input[type="checkbox"] {
+  width: auto;
+}

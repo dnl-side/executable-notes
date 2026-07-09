@@ -104,6 +104,76 @@ export function NoteEditor({ form, onUpdate }: NoteEditorProps) {
           rows={12}
         />
       </div>
+            <section className="note-settings">
+        <h3>実行設定</h3>
+
+        <div className="form-grid">
+          <div className="form-row">
+            <label htmlFor="timeoutSeconds">タイムアウト秒数</label>
+            <input
+              id="timeoutSeconds"
+              type="number"
+              min={1}
+              max={3600}
+              value={form.timeout_seconds}
+              onChange={(event) =>
+                onUpdate("timeout_seconds", Number(event.target.value))
+              }
+            />
+          </div>
+
+          <div className="form-row">
+            <label htmlFor="consoleWaitSeconds">終了後待機秒数</label>
+            <input
+              id="consoleWaitSeconds"
+              type="number"
+              min={0}
+              max={300}
+              value={form.console_wait_seconds}
+              onChange={(event) =>
+                onUpdate("console_wait_seconds", Number(event.target.value))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="settings-grid">
+          <label>
+            <input
+              type="checkbox"
+              checked={form.show_console}
+              onChange={(event) =>
+                onUpdate("show_console", event.target.checked)
+              }
+            />
+            コンソールを表示する
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.close_console}
+              onChange={(event) =>
+                onUpdate("close_console", event.target.checked)
+              }
+              disabled={!form.show_console}
+            />
+            実行後にコンソールを閉じる
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              checked={form.take_screenshot_on_finish}
+              onChange={(event) =>
+                onUpdate("take_screenshot_on_finish", event.target.checked)
+              }
+              disabled={!form.show_console}
+            />
+            実行後にスクリーンショットを取得する
+          </label>
+        </div>
+      </section>
     </>
   );
 }

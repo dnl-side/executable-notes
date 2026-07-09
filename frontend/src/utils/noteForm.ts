@@ -8,6 +8,11 @@ export const emptyForm: NotePayload = {
   default_shell: "cmd",
   run_mode: "none",
   open_url: "",
+  timeout_seconds: 900,
+  take_screenshot_on_finish: true,
+  console_wait_seconds: 15,
+  show_console: true,
+  close_console: true,
 };
 
 export function normalizePayload(payload: NotePayload): NotePayload {
@@ -27,6 +32,11 @@ export function noteToPayload(note: Note): NotePayload {
     default_shell: note.default_shell,
     run_mode: note.run_mode,
     open_url: note.open_url ?? "",
+    timeout_seconds: note.timeout_seconds ?? 900,
+    take_screenshot_on_finish: note.take_screenshot_on_finish ?? true,
+    console_wait_seconds: note.console_wait_seconds ?? 15,
+    show_console: note.show_console ?? true,
+    close_console: note.close_console ?? true,
   };
 }
 
