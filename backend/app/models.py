@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -28,6 +28,36 @@ class Note(Base):
 
     # Example: http://localhost:5173
     open_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    timeout_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=900,
+    )
+
+    take_screenshot_on_finish: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    console_wait_seconds: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=15,
+    )
+
+    show_console: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
+
+    close_console: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime,

@@ -18,6 +18,11 @@ class NoteBase(BaseModel):
     default_shell: DefaultShell = "cmd"
     run_mode: RunMode = "none"
     open_url: str | None = None
+    timeout_seconds: int = Field(default=900, ge=1, le=3600)
+    take_screenshot_on_finish: bool = True
+    console_wait_seconds: int = Field(default=15, ge=0, le=300)
+    show_console: bool = True
+    close_console: bool = True
 
 
 class NoteCreate(NoteBase):
@@ -33,6 +38,11 @@ class NoteUpdate(BaseModel):
     default_shell: DefaultShell | None = None
     run_mode: RunMode | None = None
     open_url: str | None = None
+    timeout_seconds: int | None = Field(default=None, ge=1, le=3600)
+    take_screenshot_on_finish: bool | None = None
+    console_wait_seconds: int | None = Field(default=None, ge=0, le=300)
+    show_console: bool | None = None
+    close_console: bool | None = None
 
 
 class NoteResponse(NoteBase):

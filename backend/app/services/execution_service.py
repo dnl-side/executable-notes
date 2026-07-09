@@ -14,7 +14,6 @@ from app.database import SessionLocal
 from app.models import Note, NoteRun, NoteScreenshot
 from app.services.screenshot_service import capture_window_screenshot_by_title
 
-EXECUTE_TIMEOUT_SECONDS = 900
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = BACKEND_ROOT / "storage" / "logs"
 
@@ -130,7 +129,7 @@ def execute_note(db: Session, note: Note) -> NoteRun:
 
     try:
         if note.run_mode == "execute":
-            _run_execute_mode(db, run, working_directory, commands)
+            _run_execute_mode(db, run, note, working_directory, commands)
         elif note.run_mode == "launch":
             _run_launch_mode(db, run, working_directory, commands, note.open_url)
         else:
@@ -149,10 +148,24 @@ def execute_note(db: Session, note: Note) -> NoteRun:
 def _run_execute_mode(
     db: Session,
     run: NoteRun,
+    note: Note,
     working_directory: Path,
     commands: list[str],
 ) -> None:
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    timeout_seconds = max(int(note.timeout_seconds or 900), 1)
+    console_wait_seconds = max(int(note.console_wait_seconds or 0), 0)
+
+    if not note.show_console:
+        _run_execute_mode_hidden(
+            db=db,
+            run=run,
+            working_directory=working_directory,
+            commands=commands,
+            timeout_seconds=timeout_seconds,
+        )
+        return
 
     bat_content = _build_cmd_bat(working_directory, commands)
 
@@ -169,6 +182,27 @@ def _run_execute_mode(
     marker_path = LOG_DIR / f"note_run_{run.id}.done"
     window_title = f"ExecutableNotes-Run-{run.id}"
 
+    after_finish_lines: list[str] = [
+        "$exitCode | Set-Content -Path $markerPath -Encoding UTF8",
+    ]
+
+    if note.take_screenshot_on_finish:
+        after_finish_lines.append(
+            'Write-Host "[Executable Notes] Waiting for screenshot capture..."'
+        )
+
+    if note.close_console:
+        after_finish_lines.append(f"Start-Sleep -Seconds {console_wait_seconds}")
+        after_finish_lines.append("exit $exitCode")
+    else:
+        after_finish_lines.append(
+            'Write-Host "[Executable Notes] Console will remain open."'
+        )
+        after_finish_lines.append(
+            'Read-Host "[Executable Notes] Press Enter to close this console"'
+        )
+        after_finish_lines.append("exit $exitCode")
+
     ps_script = "\n".join(
         [
             "$ErrorActionPreference = 'Continue'",
@@ -182,7 +216,7 @@ def _run_execute_mode(
             "New-Item -ItemType Directory -Force -Path (Split-Path $logPath) | Out-Null",
             "if (Test-Path $logPath) { Remove-Item $logPath -Force }",
             "if (Test-Path $markerPath) { Remove-Item $markerPath -Force }",
-            'Write-Host "[Executable Notes] 実行を開始します..."',
+            'Write-Host "[Executable Notes] Starting execution..."',
             'Write-Host "[Executable Notes] BAT: $batPath"',
             'Write-Host "[Executable Notes] LOG: $logPath"',
             '& cmd.exe /c $batPath 2>&1 | ForEach-Object {',
@@ -192,13 +226,10 @@ def _run_execute_mode(
             '}',
             "$exitCode = $LASTEXITCODE",
             'Write-Host ""',
-            'Write-Host "[Executable Notes] 実行が完了しました。ExitCode=$exitCode"',
+            'Write-Host "[Executable Notes] Execution finished. ExitCode=$exitCode"',
             f"[Console]::Title = {_ps_quote(window_title)}",
             f"cmd.exe /c title {window_title}",
-            '"done" | Set-Content -Path $markerPath -Encoding UTF8',
-            'Write-Host "[Executable Notes] スクリーンショット取得待機中..."',
-            "Start-Sleep -Seconds 15",
-            "exit $exitCode",
+            *after_finish_lines,
         ]
     )
 
@@ -242,10 +273,65 @@ def _run_execute_mode(
             bat_path,
             ps1_path,
             window_title,
+            timeout_seconds,
+            note.take_screenshot_on_finish,
+            note.close_console,
         ),
         daemon=True,
     )
     watcher.start()
+
+def _run_execute_mode_hidden(
+    db: Session,
+    run: NoteRun,
+    working_directory: Path,
+    commands: list[str],
+    timeout_seconds: int,
+) -> None:
+    bat_content = _build_cmd_bat(working_directory, commands)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".bat",
+        delete=False,
+        encoding="utf-8-sig",
+    ) as file:
+        file.write(bat_content)
+        bat_path = file.name
+
+    try:
+        result = subprocess.run(
+            ["cmd.exe", "/c", bat_path],
+            cwd=str(working_directory),
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+
+        run.pid = None
+        run.return_code = result.returncode
+        run.stdout = result.stdout or ""
+        run.stderr = result.stderr or ""
+        run.status = "success" if result.returncode == 0 else "failed"
+        run.finished_at = datetime.utcnow()
+
+    except subprocess.TimeoutExpired as error:
+        run.pid = None
+        run.return_code = None
+        run.status = "failed"
+        run.stdout = error.stdout if isinstance(error.stdout, str) else ""
+        run.stderr = error.stderr if isinstance(error.stderr, str) else ""
+        run.stderr += f"\nTimeout: {timeout_seconds} seconds"
+        run.finished_at = datetime.utcnow()
+
+    finally:
+        db.commit()
+        db.refresh(run)
+
+        try:
+            Path(bat_path).unlink(missing_ok=True)
+        except OSError:
+            pass
 
 def _run_launch_mode(
     db: Session,
@@ -363,6 +449,7 @@ def _finish_execute_run(
     run_id: int,
     return_code: int,
     timed_out: bool,
+    timeout_seconds: int,
 ) -> None:
     db = SessionLocal()
 
@@ -379,7 +466,7 @@ def _finish_execute_run(
             run.status = "failed"
             run.stderr = (
                 (run.stderr or "")
-                + f"\nタイムアウトしました: {EXECUTE_TIMEOUT_SECONDS}秒"
+                + f"\nTimeout: {timeout_seconds} seconds"
             )
         else:
             run.status = "success" if return_code == 0 else "failed"
@@ -389,6 +476,12 @@ def _finish_execute_run(
     finally:
         db.close()
 
+def _read_marker_exit_code(marker_path: Path) -> int:
+    try:
+        text = marker_path.read_text(encoding="utf-8-sig").strip()
+        return int(text)
+    except (OSError, ValueError):
+        return -1
 
 def _watch_visible_execute_process(
     run_id: int,
@@ -399,11 +492,15 @@ def _watch_visible_execute_process(
     bat_path: str,
     ps1_path: str,
     window_title: str,
+    timeout_seconds: int,
+    take_screenshot_on_finish: bool,
+    close_console: bool,
 ) -> None:
     offset = 0
-    deadline = time.monotonic() + EXECUTE_TIMEOUT_SECONDS
+    deadline = time.monotonic() + timeout_seconds
     timed_out = False
     screenshot_taken = False
+    run_finished_by_marker = False
 
     while process.poll() is None:
         text, offset = _read_new_log_text(log_path, offset)
@@ -411,25 +508,39 @@ def _watch_visible_execute_process(
 
         if marker_path.exists() and not screenshot_taken:
             screenshot_taken = True
-            _append_stdout(
-                run_id,
-                f"\n[Executable Notes] Screenshot marker detected: {marker_path}\n",
-            )
-            _capture_execute_screenshot(
-                run_id=run_id,
-                note_id=note_id,
-                window_title=window_title,
-            )
+
+            if take_screenshot_on_finish:
+                _append_stdout(
+                    run_id,
+                    f"\n[Executable Notes] Screenshot marker detected: {marker_path}\n",
+                )
+                _capture_execute_screenshot(
+                    run_id=run_id,
+                    note_id=note_id,
+                    window_title=window_title,
+                )
+
+            if not close_console:
+                return_code = _read_marker_exit_code(marker_path)
+                _finish_execute_run(
+                    run_id=run_id,
+                    return_code=return_code,
+                    timed_out=False,
+                    timeout_seconds=timeout_seconds,
+                )
+                run_finished_by_marker = True
+                break
 
         if time.monotonic() > deadline:
             timed_out = True
-
             screenshot_taken = True
-            _capture_execute_screenshot(
-                run_id=run_id,
-                note_id=note_id,
-                window_title=window_title,
-            )
+
+            if take_screenshot_on_finish:
+                _capture_execute_screenshot(
+                    run_id=run_id,
+                    note_id=note_id,
+                    window_title=window_title,
+                )
 
             subprocess.run(
                 ["taskkill", "/PID", str(process.pid), "/T", "/F"],
@@ -440,19 +551,27 @@ def _watch_visible_execute_process(
 
         time.sleep(1)
 
+    if run_finished_by_marker:
+        return
+
     return_code = process.wait()
 
     text, offset = _read_new_log_text(log_path, offset)
     _append_stdout(run_id, text)
 
-    if not screenshot_taken:
+    if take_screenshot_on_finish and not screenshot_taken:
         _capture_execute_screenshot(
             run_id=run_id,
             note_id=note_id,
             window_title=window_title,
         )
 
-    _finish_execute_run(run_id, return_code, timed_out)
+    _finish_execute_run(
+        run_id=run_id,
+        return_code=return_code,
+        timed_out=timed_out,
+        timeout_seconds=timeout_seconds,
+    )
 
     for temp_path in [bat_path, ps1_path, str(marker_path)]:
         try:
