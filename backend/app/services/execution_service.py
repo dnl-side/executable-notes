@@ -17,7 +17,6 @@ from app.services.screenshot_service import capture_window_screenshot_by_title
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = BACKEND_ROOT / "storage" / "logs"
 RUN_LOG_RETENTION_COUNT = 5
-ACTIVE_RUN_STATUSES = ["running", "launched", "interactive"]
 
 def _validate_working_directory(working_directory: str | None) -> Path:
     if not working_directory:
@@ -78,17 +77,19 @@ def cleanup_old_note_runs(
     note_id: int,
     keep_count: int = RUN_LOG_RETENTION_COUNT,
 ) -> None:
-    finished_runs = (
+    all_runs = (
         db.query(NoteRun)
         .filter(NoteRun.note_id == note_id)
-        .filter(~NoteRun.status.in_(ACTIVE_RUN_STATUSES))
         .order_by(NoteRun.started_at.desc())
         .all()
     )
 
-    runs_to_delete = finished_runs[keep_count:]
+    runs_to_delete = all_runs[keep_count:]
 
     for old_run in runs_to_delete:
+        if old_run.status == "running":
+            continue
+
         screenshots = (
             db.query(NoteScreenshot)
             .filter(NoteScreenshot.run_id == old_run.id)
