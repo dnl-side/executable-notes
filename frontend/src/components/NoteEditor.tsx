@@ -104,7 +104,7 @@ export function NoteEditor({ form, onUpdate }: NoteEditorProps) {
           rows={12}
         />
       </div>
-            <section className="note-settings">
+        <section className="note-settings">
         <h3>実行設定</h3>
 
         <div className="form-grid">
