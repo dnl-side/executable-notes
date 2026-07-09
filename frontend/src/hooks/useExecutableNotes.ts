@@ -29,6 +29,7 @@ export function useExecutableNotes() {
 
   const [runs, setRuns] = useState<NoteRun[]>([]);
   const [showRuns, setShowRuns] = useState(false);
+  const [activeRunId, setActiveRunId] = useState<number | null>(null);
 
   const [screenshots, setScreenshots] = useState<NoteScreenshot[]>([]);
   const [showScreenshots, setShowScreenshots] = useState(false);
@@ -64,13 +65,7 @@ export function useExecutableNotes() {
   }, []);
 
   useEffect(() => {
-    if (!showRuns || selectedNoteId === null) {
-      return;
-    }
-
-    const hasRunningExecute = runs.some((run) => run.status === "running");
-
-    if (!hasRunningExecute) {
+    if (selectedNoteId === null || activeRunId === null) {
       return;
     }
 
@@ -79,10 +74,13 @@ export function useExecutableNotes() {
         const data = await fetchNoteRuns(selectedNoteId);
         setRuns(data);
 
-        const stillRunning = data.some((run) => run.status === "running");
+        await loadScreenshots(selectedNoteId);
 
-        if (!stillRunning) {
+        const activeRun = data.find((run) => run.id === activeRunId);
+
+        if (activeRun === undefined || activeRun.status !== "running") {
           refreshScreenshotsAfterRun(selectedNoteId);
+          setActiveRunId(null);
         }
       } catch (error) {
         console.error(error);
@@ -92,11 +90,12 @@ export function useExecutableNotes() {
     return () => {
       window.clearInterval(timerId);
     };
-  }, [showRuns, selectedNoteId, runs]);
+  }, [selectedNoteId, activeRunId]);
 
   useEffect(() => {
     setRuns([]);
     setShowRuns(false);
+    setActiveRunId(null);
     setScreenshots([]);
     setShowScreenshots(false);
     setSelectedScreenshot(null);
@@ -200,7 +199,9 @@ export function useExecutableNotes() {
 
       const data = await fetchNoteRuns(selectedNoteId);
       setRuns(data);
-      refreshScreenshotsAfterRun(selectedNoteId);
+      await loadScreenshots(selectedNoteId);
+
+      setActiveRunId(run.id);
       setShowRuns(true);
     } catch (error) {
       console.error(error);
@@ -251,9 +252,11 @@ export function useExecutableNotes() {
     try {
       const run = await stopNote(selectedNoteId);
       setMessage(`停止しました。status=${run.status}, pid=${run.pid ?? "-"}`);
+      setActiveRunId(null);
 
       const data = await fetchNoteRuns(selectedNoteId);
       setRuns(data);
+      await loadScreenshots(selectedNoteId);
       setShowRuns(true);
     } catch (error) {
       console.error(error);
