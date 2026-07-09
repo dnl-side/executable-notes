@@ -160,7 +160,7 @@ def _run_execute_mode(
         mode="w",
         suffix=".bat",
         delete=False,
-        encoding="utf-8",
+        encoding="utf-8-sig",
     ) as file:
         file.write(bat_content)
         bat_path = file.name
@@ -206,7 +206,7 @@ def _run_execute_mode(
         mode="w",
         suffix=".ps1",
         delete=False,
-        encoding="utf-8",
+        encoding="utf-8-sig",
     ) as file:
         file.write(ps_script)
         ps1_path = file.name
