@@ -5,6 +5,9 @@ import tempfile
 import time
 import threading
 
+import pyautogui
+import pygetwindow as gw
+
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -74,6 +77,96 @@ def _open_edge(url: str) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
+def _normalize_url_for_compare(url: str) -> str:
+    return url.strip().rstrip("/")
+
+
+def _get_clipboard_text() -> str:
+    result = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            "Get-Clipboard",
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
+def _set_clipboard_text(text: str) -> None:
+    subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-Command",
+            "$input | Set-Clipboard",
+        ],
+        input=text,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _focus_edge_window() -> bool:
+    windows = [
+        window
+        for window in gw.getAllWindows()
+        if "Microsoft Edge" in (window.title or "")
+    ]
+
+    if not windows:
+        return False
+
+    window = windows[0]
+
+    if window.isMinimized:
+        window.restore()
+        time.sleep(0.5)
+
+    try:
+        window.activate()
+        time.sleep(0.5)
+        return True
+    except Exception:
+        return False
+
+
+def _open_or_focus_edge_url(url: str, max_tabs: int = 20) -> None:
+    if not _focus_edge_window():
+        _open_edge(url)
+        return
+
+    target_url = _normalize_url_for_compare(url)
+    original_clipboard = _get_clipboard_text()
+
+    try:
+        for _ in range(max_tabs):
+            pyautogui.hotkey("ctrl", "l")
+            time.sleep(0.1)
+            pyautogui.hotkey("ctrl", "c")
+            time.sleep(0.1)
+
+            current_url = _normalize_url_for_compare(_get_clipboard_text())
+            pyautogui.press("esc")
+
+            if current_url == target_url:
+                return
+
+            pyautogui.hotkey("ctrl", "tab")
+            time.sleep(0.15)
+
+        pyautogui.hotkey("ctrl", "t")
+        time.sleep(0.1)
+        _set_clipboard_text(url)
+        pyautogui.hotkey("ctrl", "v")
+        pyautogui.press("enter")
+
+    finally:
+        _set_clipboard_text(original_clipboard)
 
 def cleanup_old_note_runs(
     db: Session,
@@ -435,7 +528,7 @@ def _run_launch_mode(
         is_ready = _wait_for_url(note.open_url, timeout_seconds=timeout_seconds)
 
         if is_ready:
-            _open_edge(note.open_url)
+            _open_or_focus_edge_url(note.open_url)
 
             run.stdout = (
                 (run.stdout or "")
