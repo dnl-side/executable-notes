@@ -177,7 +177,7 @@ def execute_note(db: Session, note: Note) -> NoteRun:
         if note.run_mode == "execute":
             _run_execute_mode(db, run, note, working_directory, commands)
         elif note.run_mode == "launch":
-            _run_launch_mode(db, run, working_directory, commands, note.open_url)
+            _run_launch_mode(db, run, note, working_directory, commands)
         else:
             raise ValueError(f"未対応の実行モードです: {note.run_mode}")
 
@@ -383,34 +383,68 @@ def _run_execute_mode_hidden(
 def _run_launch_mode(
     db: Session,
     run: NoteRun,
+    note: Note,
     working_directory: Path,
     commands: list[str],
-    open_url: str | None,
 ) -> None:
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    timeout_seconds = max(int(note.timeout_seconds or 60), 1)
     command_text = " && ".join(commands)
+    log_path = LOG_DIR / f"note_run_{run.id}.log"
+    window_title = f"ExecutableNotes-Launch-{run.id}"
+
+    if log_path.exists():
+        log_path.unlink(missing_ok=True)
+
+    launch_command = (
+        f'title {window_title} && '
+        f'chcp 65001 >nul && '
+        f'{command_text}'
+    )
 
     process = subprocess.Popen(
-        ["cmd.exe", "/k", command_text],
+        ["cmd.exe", "/k", launch_command],
         cwd=str(working_directory),
         creationflags=subprocess.CREATE_NEW_CONSOLE,
     )
 
     run.pid = process.pid
     run.status = "launched"
+    run.stdout = (
+        f"[Executable Notes] Launch started.\n"
+        f"PID: {process.pid}\n"
+        f"Working directory: {working_directory}\n"
+        f"Command:\n{command_text}\n"
+    )
+    run.stderr = ""
     db.commit()
     db.refresh(run)
 
-    if open_url:
-        is_ready = _wait_for_url(open_url, timeout_seconds=60)
+    if note.open_url:
+        run.stdout = (
+            (run.stdout or "")
+            + f"\n[Executable Notes] Waiting for URL: {note.open_url}\n"
+            + f"[Executable Notes] URL wait timeout: {timeout_seconds} seconds\n"
+        )
+        db.commit()
+
+        is_ready = _wait_for_url(note.open_url, timeout_seconds=timeout_seconds)
 
         if is_ready:
-            _open_edge(open_url)
+            _open_edge(note.open_url)
+            run.stdout = (
+                (run.stdout or "")
+                + f"[Executable Notes] URL opened: {note.open_url}\n"
+            )
         else:
             run.stderr = (
-                run.stderr
-                + f"\nURLの起動待機がタイムアウトしました: {open_url}"
+                (run.stderr or "")
+                + f"\n[Executable Notes] URL wait timed out: {note.open_url}"
             )
-            db.commit()
+
+        db.commit()
+        db.refresh(run)
 
 def _is_process_running(pid: int) -> bool:
     result = subprocess.run(
